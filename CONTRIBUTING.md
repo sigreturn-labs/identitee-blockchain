@@ -57,6 +57,4 @@ right to grant this license.
 
 ## Security
 
-Do not open a public issue for a vulnerability. Report it through GitHub's private vulnerability
-reporting on this repository (Security tab, "Report a vulnerability"), or write to
-contact@sigreturn.com.
+Do not open a public issue for a vulnerability. See [SECURITY.md](SECURITY.md).

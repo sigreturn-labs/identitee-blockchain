@@ -103,7 +103,7 @@ cd tools && npm ci && npm test                                   # tools test su
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately, as described there.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
