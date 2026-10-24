@@ -1,0 +1,23 @@
+{
+  "subs": [
+    [
+      "idqY6TowxB9qMJatSWik52Hi8kLzegx7sK5EVAftPkmFLzJMf",
+      "0x6d61696e206c6170746f70"
+    ]
+  ],
+  "pending": [
+    [
+      "idnnuZEwh4Dv3QfxF6oS2zMD881G1KvXWXaWgYeBUAusWkd64",
+      "0x70686f6e65"
+    ]
+  ],
+  "proposalsToEve": [
+    [
+      [
+        "idnnuZEwh4Dv3QfxF6oS2zMD881G1KvXWXaWgYeBUAusWkd64",
+        "idnLHSmv5dsrPchjHig4iKyALqy5nLX46MbvkgTKPvLFc5QQz"
+      ],
+      "0x70686f6e65"
+    ]
+  ]
+}

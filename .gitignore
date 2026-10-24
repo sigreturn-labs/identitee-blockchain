@@ -1,0 +1,12 @@
+# Rust build output (target-trixie/ holds the Debian release build)
+/target/
+/target-trixie/
+
+# Node dependencies
+node_modules/
+
+# Local configuration and secrets
+.env
+
+# Verifier state in development (VERIFIER_DEV=1)
+.verifier-state/

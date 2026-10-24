@@ -1,0 +1,11 @@
+{
+  "pending": [
+    [[0, { "field": { "typed": "Email" } }], 10],
+    [[0, { "field": { "custom": "0x6d6173746f646f6e" } }], 11],
+    [[0, { "field": { "link": 0 } }], 12],
+    [[0, { "fact": "DocumentChecked" }], 13]
+  ],
+  "authority": { "name": "0x6964656e7469746565", "active": true },
+  "migrationPending": ["Polkadot", 14],
+  "history": ["Polkadot", 1, "0x6dcad60658cffcc5708bcf08a98b80cffc97ac2564355277d91e4002bd92d71f", [[5, "Reasonable"], [3, "FeePaid"]]]
+}

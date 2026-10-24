@@ -1,0 +1,70 @@
+# identitee testnet validator (single authority), installed as
+# /etc/systemd/system/identitee-node.service. See docs/OPERATIONS.md.
+#
+# RPC listens on 127.0.0.1:9944 only (no --rpc-external): nginx publishes it over TLS
+# (deploy/nginx-rpc.conf). --rpc-methods safe is explicit because nginx connects from localhost,
+# which "auto" would treat as trusted and serve unsafe methods (author_insertKey...) to the world.
+# P2P listens on localhost too: a single validator has no peer to reach.
+
+[Unit]
+Description=identitee testnet node (validator)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=identitee
+Group=identitee
+ExecStart=/usr/local/bin/identitee-node \
+	--chain /etc/identitee/identitee-testnet-raw.json \
+	--base-path /var/lib/identitee \
+	--node-key-file /var/lib/identitee/node-key \
+	--validator \
+	--name identitee-01 \
+	--listen-addr /ip4/127.0.0.1/tcp/30333 \
+	--no-mdns \
+	--rpc-port 9944 \
+	--rpc-methods safe \
+	--rpc-cors all \
+	--state-pruning archive \
+	--blocks-pruning archive
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+LimitNOFILE=65536
+
+# Hardening: the node only writes its base path. Try a change on a throwaway --dev node under
+# systemd-run first (docs/OPERATIONS.md). Not MemoryDenyWriteExecute: wasmtime compiles the runtime
+# to native code at run time. Several of these options (ProtectKernel*, ProtectControlGroups,
+# ProtectSystem...) imply a private mount namespace (PrivateMounts), harmless while the node creates
+# no namespace of its own.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/identitee
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# Not ProcSubset=pid: it hides /proc/meminfo and /proc/cpuinfo, and the node then silently runs
+# without its shared trie cache ("Not enough memory ... total 0 bytes").
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

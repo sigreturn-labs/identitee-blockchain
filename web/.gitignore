@@ -1,0 +1,4 @@
+dist/
+screenshots/
+.shot-dist/
+.wrangler/

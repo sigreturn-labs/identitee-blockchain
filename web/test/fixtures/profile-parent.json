@@ -1,0 +1,24 @@
+{
+  "identity": {
+    "typed": {},
+    "custom": {},
+    "links": [],
+    "nextLinkId": 0,
+    "bio": "0x4920616d206120706172656e74",
+    "avatar": null,
+    "createdAt": 11,
+    "updatedAt": 11
+  },
+  "name": null,
+  "trustLevel": "Declared",
+  "attestations": [],
+  "facts": [],
+  "parent": null,
+  "subs": [
+    [
+      "idqY6TowxB9qMJatSWik52Hi8kLzegx7sK5EVAftPkmFLzJMf",
+      "0x6d61696e206c6170746f70"
+    ]
+  ],
+  "imported": null
+}

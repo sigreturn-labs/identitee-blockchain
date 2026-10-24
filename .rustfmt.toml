@@ -1,0 +1,10 @@
+edition = "2021"
+hard_tabs = true
+max_width = 100
+use_small_heuristics = "Max"
+chain_width = 80
+reorder_imports = true
+newline_style = "Unix"
+match_arm_leading_pipes = "Never"
+match_block_trailing_comma = true
+use_field_init_shorthand = true

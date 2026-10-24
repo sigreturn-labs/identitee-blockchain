@@ -1,0 +1,90 @@
+[package]
+name = "identitee-node"
+description = "identitee node: a Polkadot SDK solochain dedicated to on-chain identity."
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+build = "build.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { features = ["derive"], workspace = true }
+futures = { features = ["thread-pool"], workspace = true }
+jsonrpsee = { features = ["server"], workspace = true }
+
+# substrate client
+sc-basic-authorship = { workspace = true, default-features = true }
+sc-cli = { workspace = true, default-features = true }
+sc-client-api = { workspace = true, default-features = true }
+sc-consensus = { workspace = true, default-features = true }
+sc-consensus-aura = { workspace = true, default-features = true }
+sc-consensus-grandpa = { workspace = true, default-features = true }
+sc-executor = { workspace = true, default-features = true }
+sc-network = { workspace = true, default-features = true }
+sc-offchain = { workspace = true, default-features = true }
+sc-service = { workspace = true, default-features = true }
+sc-telemetry = { workspace = true, default-features = true }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-consensus-aura = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-genesis-builder = { workspace = true, default-features = true }
+
+# substrate primitives
+sp-api = { workspace = true, default-features = true }
+sp-block-builder = { workspace = true, default-features = true }
+sp-blockchain = { workspace = true, default-features = true }
+sp-inherents = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
+sp-keyring = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-timestamp = { workspace = true, default-features = true }
+
+# frame and pallets
+frame-metadata-hash-extension = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+pallet-skip-feeless-payment = { workspace = true, default-features = true }
+pallet-transaction-payment = { workspace = true, default-features = true }
+pallet-transaction-payment-rpc = { workspace = true, default-features = true }
+substrate-frame-rpc-system = { workspace = true, default-features = true }
+
+# These dependencies are used for runtime benchmarking
+frame-benchmarking-cli = { workspace = true, default-features = true }
+
+# Local Dependencies
+identitee-runtime = { workspace = true }
+
+[build-dependencies]
+substrate-build-script-utils = { workspace = true, default-features = true }
+
+[features]
+default = ["std"]
+std = ["identitee-runtime/std"]
+# Needed only when building the node with runtime benchmarks.
+runtime-benchmarks = [
+	"frame-benchmarking-cli/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-skip-feeless-payment/runtime-benchmarks",
+	"pallet-transaction-payment/runtime-benchmarks",
+	"sc-service/runtime-benchmarks",
+	"identitee-runtime/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
+# Enable the try-runtime hooks, to test runtime upgrades against live state.
+try-runtime = [
+	"frame-system/try-runtime",
+	"pallet-skip-feeless-payment/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"identitee-runtime/try-runtime",
+	"sp-runtime/try-runtime",
+]

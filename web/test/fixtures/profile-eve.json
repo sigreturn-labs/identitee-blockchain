@@ -1,0 +1,41 @@
+{
+  "identity": {
+    "typed": {
+      "Email": {
+        "public": "0x657665406578616d706c652e6f7267"
+      }
+    },
+    "custom": {},
+    "links": [],
+    "nextLinkId": 0,
+    "bio": "0x",
+    "avatar": null,
+    "createdAt": 16,
+    "updatedAt": 16
+  },
+  "name": null,
+  "trustLevel": "FullyVerified",
+  "attestations": [
+    [
+      {
+        "typed": "Email"
+      },
+      0,
+      {
+        "commitment": "0xc5a4c7af6babe1009581fb53eb42b21359baa4e368f066cd41898adade4d537c",
+        "verdict": "Verified",
+        "method": {
+          "manual": null
+        },
+        "issuedAt": 17,
+        "expiresAt": null,
+        "revoked": null
+      },
+      true
+    ]
+  ],
+  "facts": [],
+  "parent": null,
+  "subs": [],
+  "imported": null
+}

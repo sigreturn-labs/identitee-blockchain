@@ -1,0 +1,263 @@
+{
+  "source": "Kusama",
+  "endpoint": "wss://kusama-people-rpc.polkadot.io",
+  "specName": "people-kusama",
+  "specVersion": 2003002,
+  "block": 11263113,
+  "blockHash": "0x41ac4eba9860521dbb515bb59c3febc5331d0a297684f8a1a229d17f5ed3905f",
+  "accounts": {
+    "fee_paid_unknown_and_reasonable": {
+      "address": "Fr4NzY1udSFFLzb2R3qxVQkwz9cZraWkyfH4h3mVVk7BK7P",
+      "why": "FeePaid (5), Unknown (6) and Reasonable (7): both Kusama dotID registrars present, only 7 is a verdict",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab8704714dd4e3f25f5378a6d90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22",
+      "raw": "0x0c050000000100902f50090000000000000000000000060000000007000000026b7d7d8f01000000000000000000000008436861726c696510436861726c6965204578616d706c651c68747470733a2f2f636861726c69652e6578616d706c652e636f6d0014636861726c6965406578616d706c652e636f6d0000000000",
+      "identityOf": {
+        "judgements": [
+          [
+            5,
+            {
+              "feePaid": 40000000000
+            }
+          ],
+          [
+            6,
+            {
+              "unknown": null
+            }
+          ],
+          [
+            7,
+            {
+              "reasonable": null
+            }
+          ]
+        ],
+        "deposit": 6702333291,
+        "info": {
+          "display": {
+            "raw": "0x436861726c6965"
+          },
+          "legal": {
+            "raw": "0x436861726c6965204578616d706c65"
+          },
+          "web": {
+            "raw": "0x68747470733a2f2f636861726c69652e6578616d706c652e636f6d"
+          },
+          "matrix": {
+            "none": null
+          },
+          "email": {
+            "raw": "0x636861726c6965406578616d706c652e636f6d"
+          },
+          "pgpFingerprint": null,
+          "image": {
+            "none": null
+          },
+          "twitter": {
+            "none": null
+          },
+          "github": {
+            "none": null
+          },
+          "discord": {
+            "none": null
+          }
+        }
+      }
+    },
+    "both_dotid_registrars": {
+      "address": "DfnTB4z7eUvYRqcGtTpFsLC69o6tvBSC1pEv8vWPZFtCkaK",
+      "why": "KnownGood by the former dotID registrar (6), OutOfDate by the current one (7)",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab87047144f58b588ac077bd5306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20",
+      "raw": "0x080600000003070000000492f5fa900100000000000000000000001944617665207c204578616d706c652056616c696461746f72001968747470733a2f2f646176652e6578616d706c652e6f72671240646176653a6578616d706c652e6f72671164617665406578616d706c652e6f7267001f68747470733a2f2f646176652e6578616d706c652e6f72672f612e706e670e40646176655f6578616d706c650d646176652d6578616d706c6500",
+      "identityOf": {
+        "judgements": [
+          [
+            6,
+            {
+              "knownGood": null
+            }
+          ],
+          [
+            7,
+            {
+              "outOfDate": null
+            }
+          ]
+        ],
+        "deposit": 6727333266,
+        "info": {
+          "display": {
+            "raw": "0x44617665207c204578616d706c652056616c696461746f72"
+          },
+          "legal": {
+            "none": null
+          },
+          "web": {
+            "raw": "0x68747470733a2f2f646176652e6578616d706c652e6f7267"
+          },
+          "matrix": {
+            "raw": "0x40646176653a6578616d706c652e6f7267"
+          },
+          "email": {
+            "raw": "0x64617665406578616d706c652e6f7267"
+          },
+          "pgpFingerprint": null,
+          "image": {
+            "raw": "0x68747470733a2f2f646176652e6578616d706c652e6f72672f612e706e67"
+          },
+          "twitter": {
+            "raw": "0x40646176655f6578616d706c65"
+          },
+          "github": {
+            "raw": "0x646176652d6578616d706c65"
+          },
+          "discord": {
+            "none": null
+          }
+        }
+      }
+    },
+    "all_fields_with_pgp": {
+      "address": "FoQJpPyadYccjavVdTWxpxU7rUEaYhfLCPwXgkfD6Zat9QP",
+      "why": "every People Chain field set, judged KnownGood by dotID (7)",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab8704714a647e755c30521d38eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+      "raw": "0x04070000000357aaae9001000000000000000000000004426f620c426f62204578616d706c651868747470733a2f2f626f622e6578616d706c652e636f6d1140626f623a6578616d706c652e6f726710626f62406578616d706c652e6f726701b0b0000000000000000000000000000000b0b0b021e343919f3b209ad8a137af57d06b22e3149989af01c4f38eb87b7bb1c2132b3e0d40626f625f6578616d706c650c626f622d6578616d706c650c626f625f6578616d706c65",
+      "identityOf": {
+        "judgements": [
+          [
+            7,
+            {
+              "knownGood": null
+            }
+          ]
+        ],
+        "deposit": 6722333271,
+        "info": {
+          "display": {
+            "raw": "0x426f62"
+          },
+          "legal": {
+            "raw": "0x426f62204578616d706c65"
+          },
+          "web": {
+            "raw": "0x68747470733a2f2f626f622e6578616d706c652e636f6d"
+          },
+          "matrix": {
+            "raw": "0x40626f623a6578616d706c652e6f7267"
+          },
+          "email": {
+            "raw": "0x626f62406578616d706c652e6f7267"
+          },
+          "pgpFingerprint": "0xb0b0000000000000000000000000000000b0b0b0",
+          "image": {
+            "raw": "0xe343919f3b209ad8a137af57d06b22e3149989af01c4f38eb87b7bb1c2132b3e"
+          },
+          "twitter": {
+            "raw": "0x40626f625f6578616d706c65"
+          },
+          "github": {
+            "raw": "0x626f622d6578616d706c65"
+          },
+          "discord": {
+            "raw": "0x626f625f6578616d706c65"
+          }
+        }
+      }
+    },
+    "hashed_legal": {
+      "address": "HnMAUz7r2G8G3hB27SYNyit5aJmh2a5P4eMdDtACtMFDbam",
+      "why": "the legal name is a BlakeTwo256 hash; Reasonable by the former dotID registrar (6)",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab870471410c174c55fd2c633e659a7a1628cdd93febc04a4e0646ea20e9f5f0ce097d9a05290d4a9e054df4e",
+      "raw": "0x0406000000021725698f0100000000000000000000000445766522b6f166fe4d9c94742d9c45de704c316c77af27197ee9c144446da69793e0281a0011406576653a6578616d706c652e6f726710657665406578616d706c652e636f6d0000000000",
+      "identityOf": {
+        "judgements": [
+          [
+            6,
+            {
+              "reasonable": null
+            }
+          ]
+        ],
+        "deposit": 6700999959,
+        "info": {
+          "display": {
+            "raw": "0x457665"
+          },
+          "legal": {
+            "blakeTwo256": "0xb6f166fe4d9c94742d9c45de704c316c77af27197ee9c144446da69793e0281a"
+          },
+          "web": {
+            "none": null
+          },
+          "matrix": {
+            "raw": "0x406576653a6578616d706c652e6f7267"
+          },
+          "email": {
+            "raw": "0x657665406578616d706c652e636f6d"
+          },
+          "pgpFingerprint": null,
+          "image": {
+            "none": null
+          },
+          "twitter": {
+            "none": null
+          },
+          "github": {
+            "none": null
+          },
+          "discord": {
+            "none": null
+          }
+        }
+      }
+    },
+    "hashed_web_sha3": {
+      "address": "DE14BzQ1bDXWPKeLoAqdLAm1GpyAWaWF1knF74cEZeomTBM",
+      "why": "the web value is a ShaThree256 hash (another hashed variant), no judgement",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab87047143e73123ebcdee9161cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c",
+      "raw": "0x00bfd5918f0100000000000000000000001ce38395e382a7e383abe38387e382a32046657264696520f09f8c9e0f466572646965204578616d706c6525a4a6bd5bdf2c27aacc1ef054f52b0eda4fe088314358017d2c7f758c9732524a0101000010406665726469655f6578616d706c650000",
+      "identityOf": {
+        "judgements": [],
+        "deposit": 6703666623,
+        "info": {
+          "display": {
+            "raw": "0xe38395e382a7e383abe38387e382a32046657264696520f09f8c9e"
+          },
+          "legal": {
+            "raw": "0x466572646965204578616d706c65"
+          },
+          "web": {
+            "shaThree256": "0xa4a6bd5bdf2c27aacc1ef054f52b0eda4fe088314358017d2c7f758c9732524a"
+          },
+          "matrix": {
+            "raw": "0x"
+          },
+          "email": {
+            "raw": "0x"
+          },
+          "pgpFingerprint": null,
+          "image": {
+            "none": null
+          },
+          "twitter": {
+            "raw": "0x406665726469655f6578616d706c65"
+          },
+          "github": {
+            "none": null
+          },
+          "discord": {
+            "none": null
+          }
+        }
+      }
+    },
+    "no_identity": {
+      "address": "HNZata7iMYWmk5RvZRTiAsSDhV8366zq2YGb3tLH5Upf74F",
+      "why": "an account without a People Chain identity",
+      "storageKey": "0x2aeddc77fe58c98d50bd37f1b90840f9cd7f37317cd20b61e9bd46fab8704714518366b5b1bc7c99d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+      "raw": null,
+      "identityOf": null
+    }
+  }
+}

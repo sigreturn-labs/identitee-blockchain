@@ -1,0 +1,1353 @@
+/* Page frame, header, Card and the profile pieces.
+   Field rows are lines: a thin rule BETWEEN rows (none above the first), one column up to 6 fields,
+   two beyond, one under 760 px; the state sits in a fixed column on the right, its icon alone under
+   480 px. */
+
+/* Background */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.backdrop.still {
+  background: radial-gradient(circle at 30% 20%, #2a2a2a, #070707 60%);
+}
+
+/* Page */
+.scene {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  /* minmax(0, 1fr): the column is the width of the window, not of the widest content (a long
+     link address must not widen the page) */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  padding-block: 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1120px;
+  width: 100%;
+  /* the same height with or without the wallet button: nothing moves between pages */
+  min-height: 44px;
+  margin-inline: auto;
+}
+.mark {
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.mark span {
+  color: var(--ink-2);
+}
+.connect {
+  font: 500 13px/1 var(--font);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  min-height: 44px;
+  max-width: min(220px, 52vw);
+  padding: 10px 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.connect:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+.connect:disabled {
+  color: var(--ink);
+  cursor: default;
+}
+.account-box {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 5;
+  width: min(300px, calc(100vw - 32px));
+  padding: 8px;
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  /* opaque: the card behind it must not show through the words */
+  background: #0d0d0d;
+  border: 1px solid var(--line);
+}
+.menu .note {
+  padding: 8px 10px;
+}
+.note a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.accounts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+.account,
+.menu-links a,
+.menu-links button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: 400 14px/1.3 var(--font);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.account:hover,
+.menu-links a:hover,
+.menu-links button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+/* a long account name is cut, the address never: it stays on one line */
+.account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account .addr {
+  flex: none;
+  font-size: 12px;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+.account.chosen > span:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  vertical-align: 1px;
+}
+.menu-links {
+  display: grid;
+  gap: 2px;
+}
+/* accounts above, pages and Disconnect below */
+.menu-links.ruled {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+/* The card is pinned at a fixed distance from the top (not centred): when it grows from its loading
+   state to the full profile, its top edge stays where it was. */
+.stage {
+  align-self: start;
+  justify-self: center;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  padding-block: clamp(24px, 9vh, 96px) 64px;
+}
+
+/* Glass and Card */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(22px) saturate(0.6);
+  -webkit-backdrop-filter: blur(22px) saturate(0.6);
+}
+.card {
+  width: min(440px, 100%);
+  border-radius: var(--radius-card);
+  padding: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.card.wide {
+  width: min(780px, 100%);
+}
+.card:empty {
+  min-height: 140px;
+}
+.card .head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.card .head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.card .name {
+  font-size: 17px;
+}
+.card .level {
+  margin-left: auto;
+  flex: none;
+}
+.addr-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+}
+/* the Copy beside an address: a finger-sized target that does not make the line taller */
+.addr-line .icon-button.copy {
+  margin-block: -12px;
+}
+.addr-line .icon-button.copy:first-child {
+  margin-left: -12px;
+}
+.card > .button {
+  justify-self: start;
+}
+
+/* Profile pieces */
+.avatar {
+  border-radius: 50%;
+  display: block;
+  flex: none;
+}
+.name {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.addr {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.level {
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  width: max-content;
+}
+.level.fraud {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* the name and its level badge */
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.badge {
+  flex: none;
+}
+/* Fraudulent: the one statement on the card that must not be missed, inverted */
+.fraud-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-row);
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.bio {
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 46ch;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.member,
+.note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.member a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+
+/* Field rows: Lines. The rule is the top border of every row but the first of each column. */
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 32px;
+  margin: 0;
+}
+.fields.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 58px;
+  gap: 12px;
+  align-items: baseline;
+  padding-block: 11px;
+  border-top: 1px solid var(--line);
+}
+.fields .row:first-child,
+.fields.two .row:nth-child(2) {
+  border-top: 0;
+}
+/* a custom field is labelled as typed: the first letter is raised, to sit with the built-in ones */
+.row dt::first-letter {
+  text-transform: uppercase;
+}
+.row dt {
+  font-size: 12px;
+  color: var(--ink-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.row dd {
+  margin: 0;
+  font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* a value with no state takes the state's column too */
+.row > dd:nth-child(2):last-child {
+  grid-column: 2 / -1;
+}
+.value-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+/* `.row dd` would give the state the size of a value: it is a dd, and smaller than one */
+.row .standing {
+  justify-self: end;
+  width: 70px; /* the widest word, Rejected, is 57 px with its dot: the dots line up, the words end near the edge */
+  margin: 0;
+  font-size: 11px;
+}
+.private {
+  color: var(--ink-2);
+}
+.state {
+  font-size: 11px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.state::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.state.off::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+}
+/* The mark of a field or a link (C, "Badge by the name"): a filled check for Verified, a dashed
+   ring and the word for Pending, a struck ring and the word for Rejected */
+.standing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.mark-icon {
+  flex: none;
+}
+/* a standing draws its own icon, not the dot of `.state` */
+.state.standing::before {
+  content: none;
+}
+
+/* Links and sub-accounts: outlined rows */
+.links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-row);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+a.link:hover {
+  border-color: var(--ink-3);
+}
+/* the title keeps at least a third of the row; the address is what gets cut */
+.link-title {
+  flex: 1 1 auto;
+  min-width: min(33%, 12ch);
+  overflow-wrap: anywhere;
+}
+.link-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 66%;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.link-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.section {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* The one Save of /me: at the end of the form, and stuck to the bottom of the window while there are
+   changes, so it is in reach wherever the person is editing */
+.savebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 0 0;
+}
+.savebar.dirty {
+  position: sticky;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  margin-inline: -10px;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-row);
+  /* opaque: the fields scrolling under it must not show through */
+  background: #0d0d0d;
+}
+.savebar-text {
+  min-width: 0;
+}
+.savebar .actions {
+  margin-left: auto;
+}
+.link-title.gone {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+/* Find a profile (home page) */
+.lookup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.lookup .problem {
+  grid-column: 1 / -1;
+}
+.lookup .input {
+  min-height: 44px;
+}
+.button.wide {
+  justify-self: stretch;
+}
+
+/* Buttons */
+.button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  font: 500 13px/1 var(--font);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 11px 18px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  text-decoration: none;
+}
+.button:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+.button.primary {
+  color: var(--ground);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.button.primary:disabled {
+  opacity: 0.32;
+}
+
+/* Editor (/me): a wider card, inputs, and the small actions around them */
+.card.edit {
+  width: min(560px, 100%);
+}
+.editor {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 30px;
+}
+.block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.label {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.input {
+  width: 100%;
+  min-width: 0;
+  font: 400 14px/1.4 var(--font);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  /* a value longer than the box ends in an ellipsis while it is not being edited */
+  text-overflow: ellipsis;
+}
+.input:hover {
+  border-color: var(--ink-3);
+}
+.input:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+.input[aria-invalid] {
+  border-color: var(--ink);
+}
+textarea.input {
+  resize: vertical;
+  min-height: 96px;
+}
+fieldset:disabled .input {
+  opacity: 0.6;
+}
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  /* the line is there with or without a problem in it: nothing below moves */
+  min-height: 19px;
+  font-size: 12px;
+}
+.meta:empty {
+  display: none;
+}
+.count {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  order: 2;
+}
+.problem,
+.hint,
+.status {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.problem {
+  color: var(--ink);
+}
+.hint,
+.status {
+  color: var(--ink-2);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.fields-edit {
+  display: grid;
+  gap: 14px;
+}
+/* Two tracks, the same on every row. The row's buttons (Make private, Remove...) are not a third
+   track (a row without them would get a wider input): they share the cell of the input and sit
+   inside its right end, so every input, the bio and the add rows all end where the card's content
+   ends. */
+.field {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: center;
+}
+.field > .label {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  overflow-wrap: anywhere;
+}
+.field > .control {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+.field > .has-action > .input {
+  padding-right: 46px;
+}
+.field > .has-actions > .input {
+  padding-right: 86px;
+}
+.field > .row-actions {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  margin-right: 1px;
+}
+.field > .row-actions:empty {
+  display: none;
+}
+.field > .note-row {
+  grid-column: 2;
+}
+.removed {
+  margin: 0;
+  padding-block: 10px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.field > .control > .private {
+  margin: 0;
+  padding-block: 10px;
+  font-size: 14px;
+}
+/* The identity secret, and the panel under a private field (Reveal, Packet) */
+.secret,
+.panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-row);
+}
+.panel {
+  margin-top: 4px;
+}
+.secret .actions .status {
+  margin-right: auto;
+}
+/* Verify: offered under the name of a field that can be verified, where a verified one shows its
+   check; the panel of a channel opens under the row */
+.field > .label > .verify {
+  margin: -6px 0 -6px -6px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+/* the row whose panel is open: its Verify reads as pressed */
+.field > .label > .verify[aria-expanded="true"] {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration-color: var(--ink);
+}
+/* the panel's Close sits in its top right corner; the first line leaves it room */
+.panel.verify {
+  position: relative;
+}
+.panel-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+.panel.verify > .panel-close + * {
+  padding-right: 32px;
+}
+/* the identity secret asked for inside the panel is part of it, not a box of its own */
+.panel.verify > .secret {
+  padding: 0 32px 0 0;
+  border: 0;
+}
+.quiet.start {
+  justify-self: start;
+  margin-left: -6px;
+}
+.copyable {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.copyable-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  padding-block: 9px;
+  /* lines break between words; only a token too long for the line (an address) breaks inside */
+  overflow-wrap: break-word;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9em) auto;
+  gap: 8px;
+  align-items: center;
+}
+.input.code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+/* The identity document row: laid out as a field row */
+.document-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: center;
+}
+.document-row > .note-row {
+  grid-column: 2;
+}
+.document-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding-block: 10px;
+  font-size: 14px;
+}
+.document-state.quiet-state {
+  color: var(--ink-2);
+}
+.document-control {
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+}
+.document-control > button {
+  margin-left: auto;
+}
+textarea.packet {
+  min-height: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: none;
+  overflow-wrap: anywhere;
+}
+.quiet {
+  font: 400 12px/1 var(--font);
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+.quiet:hover:not(:disabled) {
+  color: var(--ink);
+}
+.quiet:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Icon buttons: the secondary actions of a row (Copy, Remove, Undo, Edit, Move...). The icon is
+   16 px in a square target of 40 px (44 px on a phone), named by aria-label and title. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.icon-button:hover:not(:disabled),
+.icon-button:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.icon-button .icon {
+  display: block;
+}
+.icon-button.copy[data-copied] {
+  color: var(--ink);
+}
+/* Add, beside the inputs of an add row: outlined and as tall as they are */
+.icon-button.add-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.icon-button.add-button:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block: -8px;
+}
+.quiet-link {
+  justify-self: start;
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.add .note-row {
+  grid-column: 1 / -1;
+}
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-row);
+}
+.item-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+.item-text .link-title,
+.item-text .link-url {
+  overflow-wrap: anywhere;
+}
+.item-text .link-url {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.item-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+/* Remove asks first: the question takes the width of the row */
+.item:has(.confirm) {
+  flex-wrap: wrap;
+}
+.item-actions:has(.confirm) {
+  flex: 1 1 100%;
+}
+.item-edit {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding-block: 6px;
+  padding-right: 6px;
+}
+.item-edit .note-row {
+  grid-column: auto;
+}
+.avatar-editor {
+  display: grid;
+  gap: 14px;
+}
+.crop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 26px;
+  align-items: flex-start;
+}
+.crop-view {
+  display: grid;
+  gap: 12px;
+  max-width: 100%;
+}
+.crop-canvas {
+  display: block;
+  max-width: 100%;
+  border-radius: 14px;
+  background: #0a0a0a;
+  cursor: grab;
+  touch-action: none;
+}
+.crop-canvas:active {
+  cursor: grabbing;
+}
+.zoom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.zoom input {
+  width: 100%;
+  accent-color: var(--ink);
+}
+.avatar.stale {
+  opacity: 0.4;
+}
+.crop-result {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+/* Requests (/requests): what can be checked and where it stands, the username form, the answers
+   to a proposal. Rows follow the profile's lines: a rule between rows, none above the first. */
+.asks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding-block: 10px;
+  border-top: 1px solid var(--line);
+}
+.ask:first-child {
+  border-top: 0;
+}
+.ask-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ask-label {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.ask-value {
+  font-size: 13px;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+.ask-value.private {
+  color: var(--ink-2);
+}
+.ask-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.ask .ask-note {
+  grid-column: 1 / -1;
+}
+/* a question opened on a row takes the row's width, under its text */
+.ask:has(.confirm) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ask:has(.confirm) .ask-side {
+  justify-content: flex-start;
+}
+.ask-note a,
+.ask-value a,
+.hint a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.button.small {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+.claim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.confirm {
+  display: grid;
+  gap: 10px;
+}
+.item-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+.item-meta a {
+  color: var(--ink-3);
+  font-size: 13px;
+  text-decoration: none;
+}
+.item-meta a:hover {
+  color: var(--ink);
+}
+.add.propose {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+}
+
+/* Authority (/authority): the same rows as the requests page; a reason chosen from a list. */
+select.input {
+  color-scheme: dark;
+  cursor: pointer;
+}
+.reason-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
+  align-items: start;
+}
+.reason-row.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.reason-row .note-row {
+  grid-column: 1 / -1;
+}
+.packet-value {
+  overflow-wrap: anywhere;
+}
+.ask .panel {
+  margin-top: 6px;
+}
+/* A request names a value and who asked (a name and an address), and offers up to three actions:
+   they go under it, so that neither squeezes the other */
+.inbox .ask {
+  grid-template-columns: minmax(0, 1fr);
+}
+.inbox .ask-side {
+  justify-content: flex-start;
+}
+/* a quiet button that starts a line sits on the text's edge, not 6 px inside it */
+.inbox .ask-side > .quiet:first-child,
+.item-edit .quiet:first-child {
+  margin-left: -6px;
+}
+.inbox .ask-side > .icon-button:first-child {
+  margin-left: -12px;
+}
+/* an icon at the end of a request row ends on the edge of the rule, as a button with words does */
+.ask-side > .icon-button:last-child {
+  margin-right: -12px;
+}
+
+/* the inbox, one group per person: who asked, then their requests */
+.inbox-group {
+  display: grid;
+  gap: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.inbox-group:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.inbox-who {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.inbox-who a,
+.item-text .link-title a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.inbox-who .addr {
+  font-size: 12px;
+  font-weight: 400;
+}
+.ask-note:empty {
+  display: none;
+}
+/* the sections of the authority page, reachable from the top */
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 13px;
+}
+.jump a {
+  color: var(--ink-2);
+  text-decoration: none;
+  padding-block: 6px;
+}
+.jump a:hover {
+  color: var(--ink);
+}
+[id] {
+  scroll-margin-top: 16px;
+}
+
+/* Loading: quiet bars where the text will be */
+.bone {
+  display: block;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+}
+.avatar.bone {
+  border-radius: 50%;
+}
+
+@media (max-width: 760px) {
+  .fields.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fields.two .row:nth-child(2) {
+    border-top: 1px solid var(--line);
+  }
+  .card {
+    padding: 18px;
+  }
+}
+@media (max-width: 600px) {
+  /* the label column is the whole width: Verify goes beside the name */
+  .field > .label > .verify {
+    margin-block: -12px;
+  }
+  .field > div.label {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .document-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+  .document-row > .control {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  /* on a phone the action follows its state, it does not go to the far edge */
+  .document-control > button {
+    margin-left: 0;
+  }
+  .document-row > .note-row {
+    grid-column: 1 / -1;
+  }
+  .field {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .field > .label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .field > .row-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: auto;
+    margin-right: 0;
+  }
+  .field > .control {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .field > .has-action > .input, .field > .has-actions > .input {
+    padding-right: 12px;
+  }
+  .field > .note-row {
+    grid-column: 1 / -1;
+  }
+  .add,
+  .add.propose,
+  .reason-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .add .button {
+    justify-self: start;
+  }
+  /* every link row the same on a phone: the text, then its actions under it, aligned with it */
+  .item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .item-actions {
+    margin-left: -14px;
+    flex-wrap: wrap;
+  }
+  .quiet {
+    min-height: 40px;
+    padding-inline: 8px;
+  }
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .icon-button.add-button {
+    width: 44px;
+    height: 44px;
+  }
+  .addr-line .icon-button.copy {
+    margin-block: -14px;
+  }
+  .addr-line .icon-button.copy:first-child {
+    margin-left: -14px;
+  }
+  .jump a {
+    padding-block: 12px;
+  }
+  .button {
+    min-height: 44px;
+  }
+  .button.small {
+    min-height: 40px;
+  }
+}
+@media (max-width: 480px) {
+  /* A row that shows a state and Cancel stacks them under its text: beside it they leave the value
+     (an email) 150 px, and it breaks in the middle of a word */
+  .ask:has(.state, .standing) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ask:has(.state, .standing) .ask-side {
+    justify-content: flex-start;
+  }
+  .row {
+    grid-template-columns: 64px minmax(0, 1fr) 13px;
+    gap: 10px;
+  }
+  .row .standing {
+    width: auto;
+  }
+  /* a field's or a link's mark is the icon alone; its word stays for screen readers */
+  .row .mark-word,
+  .link .mark-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* the level goes under the name, aligned with it, instead of floating alone on the right */
+  .card .head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .card .head > div {
+    flex: 1 1 calc(100% - 70px);
+  }
+  .card .level {
+    margin-left: 70px;
+  }
+  /* a link stacks its title over its address, so neither squeezes the other */
+  .link {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .link-meta {
+    max-width: none;
+    justify-content: space-between;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

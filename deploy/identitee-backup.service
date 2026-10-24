@@ -1,0 +1,13 @@
+# Nightly backup of the identitee server (deploy/backup.sh), started by identitee-backup.timer.
+# Installed as /etc/systemd/system/identitee-backup.service. See docs/OPERATIONS.md, Backups.
+[Unit]
+Description=identitee backup (chain database + /etc/identitee, node stopped during the copy)
+After=identitee-node.service
+# A failed run writes /var/backups/identitee/LAST_FAILURE (removed by the next successful run).
+OnFailure=identitee-backup-failed.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/identitee-backup
+# The node stops within TimeoutStopSec=60; the archive of a few hundred MB takes seconds.
+TimeoutStartSec=30min

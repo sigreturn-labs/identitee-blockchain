@@ -1,0 +1,7 @@
+# Toolchain used by CI for polkadot-stable2606-3 (see .github/env in the SDK tag:
+# ci-unified image built with Rust 1.93.0). Pinned so that the runtime wasm is reproducible.
+[toolchain]
+channel = "1.93.0"
+components = ["cargo", "clippy", "rust-src", "rustc", "rustfmt"]
+targets = ["wasm32v1-none"]
+profile = "minimal"

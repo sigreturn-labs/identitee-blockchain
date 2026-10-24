@@ -1,0 +1,15 @@
+# 04:00 Europe/Paris every day, a quiet hour for the testnet's users. The explicit time zone keeps
+# the run at the same local time all year on a server whose clock is UTC; set your own.
+# Installed as /etc/systemd/system/identitee-backup.timer.
+[Unit]
+Description=Daily identitee backup at 04:00 Europe/Paris
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Europe/Paris
+AccuracySec=1s
+RandomizedDelaySec=0
+# A night missed (server down at 04:00) is not caught up later in the day.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

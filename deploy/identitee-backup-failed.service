@@ -1,0 +1,10 @@
+# Started by OnFailure= of identitee-backup.service: leaves a marker that a backup failed, with the
+# time, in /var/backups/identitee/LAST_FAILURE. deploy/backup.sh removes it after a successful run.
+# Installed as /etc/systemd/system/identitee-backup-failed.service. See docs/OPERATIONS.md, Backups.
+[Unit]
+Description=identitee backup failed: write /var/backups/identitee/LAST_FAILURE
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/bin/sh -c 'install -d -m 700 /var/backups/identitee && date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ > /var/backups/identitee/LAST_FAILURE'
