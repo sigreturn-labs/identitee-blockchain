@@ -532,6 +532,21 @@ describe('genesis', () => {
     assert.deepEqual(readdirBaks(dir), []);
   });
 
+  it('moves a marked database aside on the next open even with the same genesis', () => {
+    const a = new ExplorerStore(path);
+    a.openForGenesis(GENESIS);
+    fill(a, 3);
+    a.markChainChanged();
+    a.close();
+
+    const b = new ExplorerStore(path);
+    assert.deepEqual(b.openForGenesis(GENESIS), { reset: true });
+    assert.equal(b.lastIndexed(), null);
+    assert.ok(existsSync(`${path}.abababab.bak`));
+    assert.deepEqual(b.openForGenesis(GENESIS), { reset: false }, 'the new database is not marked');
+    b.close();
+  });
+
   it('moves a database of another genesis aside and starts empty', () => {
     const a = new ExplorerStore(path);
     a.openForGenesis(GENESIS);

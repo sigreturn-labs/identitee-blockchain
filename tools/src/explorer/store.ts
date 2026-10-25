@@ -447,7 +447,8 @@ export class ExplorerStore {
 
   /**
    * Tie the store to a chain. The first call records the genesis hash. If the store holds another
-   * chain (a testnet reset) the file is moved to `<path>.<first 8 hex of the old genesis>.bak`
+   * chain (a testnet reset), or was marked by `markChainChanged` (same genesis, other blocks, as
+   * after a node restore), the file is moved to `<path>.<first 8 hex of the old genesis>.bak`
    * (a number is added if that name is taken), and the store starts empty; an in-memory store is
    * just cleared.
    */
@@ -455,7 +456,8 @@ export class ExplorerStore {
     const genesis = genesisHash.toLowerCase();
     if (!GENESIS_RE.test(genesis)) throw new Error(`the genesis hash must be 0x and 64 hex digits, got ${JSON.stringify(genesisHash.slice(0, 80))}`);
     const stored = this.getMeta('genesis');
-    if (stored === genesis) return { reset: false };
+    const marked = this.getMeta('chain_changed') !== null;
+    if (stored === genesis && !marked) return { reset: false };
     if (stored === null) {
       this.setMeta('genesis', genesis);
       return { reset: false };
@@ -466,6 +468,11 @@ export class ExplorerStore {
     this.open();
     this.setMeta('genesis', genesis);
     return { reset: true };
+  }
+
+  /** The node serves other blocks than the index: the next `openForGenesis` starts afresh. */
+  markChainChanged(): void {
+    this.setMeta('chain_changed', String(Date.now()));
   }
 
   private moveAside(oldGenesis: string): void {

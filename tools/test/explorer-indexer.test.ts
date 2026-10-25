@@ -2,24 +2,28 @@
 // part of `ApiPromise` the indexer uses, blocks without extrinsics or events. No network.
 
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import type { ApiPromise } from '@polkadot/api';
 import { blake2AsHex } from '@polkadot/util-crypto';
 
-import { callArgs, feedRow, Indexer, truncateLarge } from '../src/explorer/indexer.ts';
+import { callArgs, ChainChangedError, feedRow, Indexer, truncateLarge } from '../src/explorer/indexer.ts';
+import { main } from '../src/explorer/main.ts';
 import { ExplorerStore } from '../src/explorer/store.ts';
 import type { Logger } from '../src/migrator.ts';
 
-const hashOf = (n: number): string => `0x${'ab'}${n.toString(16).padStart(62, '0')}`;
+const hashOf = (n: number, tag = 'ab'): string => `0x${tag}${n.toString(16).padStart(62, '0')}`;
 const numberOf = (hash: string): number => parseInt(hash.slice(4), 16);
 const codec = (hex: string) => ({ toHex: () => hex, toString: () => hex });
 const num = (n: number) => ({ toNumber: () => n, toString: () => String(n) });
 
-const header = (n: number) => ({
+const header = (n: number, tag = 'ab') => ({
   number: num(n),
-  hash: codec(hashOf(n)),
-  parentHash: codec(n === 0 ? `0x${'00'.repeat(32)}` : hashOf(n - 1)),
+  hash: codec(hashOf(n, tag)),
+  parentHash: codec(n === 0 ? `0x${'00'.repeat(32)}` : hashOf(n - 1, tag)),
   stateRoot: codec(`0x${'01'.repeat(32)}`),
   extrinsicsRoot: codec(`0x${'02'.repeat(32)}`),
   digest: { logs: [] },
@@ -32,12 +36,26 @@ interface FakeChain {
   finalize(n: number): void;
   newHead(n: number): void;
   unsubscribed: number;
+  /**
+   * The node now serves other blocks: from block `from` on (0 = a new genesis) every hash carries
+   * `tag`, and the finalized head is `finalized`. `reconnect` emits the provider's `connected`.
+   */
+  replace(from: number, tag: string, finalized: number): void;
+  reconnect(): void;
 }
 
 /** A chain whose finalized head is `finalized`; getBlock of `failAt` throws once. */
 function fakeChain(finalized: number, failAt?: number): FakeChain {
   let head = finalized;
   let failed = false;
+  let forkFrom = Infinity;
+  let forkTag = 'ab';
+  const tagOf = (n: number): string => (n >= forkFrom ? forkTag : 'ab');
+  const hdr = (n: number) => {
+    const h = header(n, tagOf(n));
+    return n > 0 ? { ...h, parentHash: codec(hashOf(n - 1, tagOf(n - 1))) } : h;
+  };
+  const connectedSubs: Array<() => void> = [];
   const finalizedSubs: Array<(h: unknown) => void> = [];
   const newSubs: Array<(h: unknown) => void> = [];
   const chain: FakeChain = {
@@ -46,15 +64,23 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
     unsubscribed: 0,
     finalize(n) {
       head = n;
-      for (const cb of finalizedSubs) cb(header(n));
+      for (const cb of finalizedSubs) cb(hdr(n));
     },
     newHead(n) {
-      for (const cb of newSubs) cb(header(n));
+      for (const cb of newSubs) cb(hdr(n));
+    },
+    replace(from, tag, fin) {
+      forkFrom = from;
+      forkTag = tag;
+      head = fin;
+    },
+    reconnect() {
+      for (const cb of [...connectedSubs]) cb();
     },
   };
   const subscribe = (list: Array<(h: unknown) => void>, first: () => number) => async (cb: (h: unknown) => void) => {
     list.push(cb);
-    cb(header(first()));
+    cb(hdr(first()));
     return () => {
       chain.unsubscribed++;
       list.splice(list.indexOf(cb), 1);
@@ -62,13 +88,21 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
   };
   const api = {
     genesisHash: codec(hashOf(0)),
+    isConnected: true,
+    on: (event: string, cb: () => void) => {
+      if (event === 'connected') connectedSubs.push(cb);
+    },
+    off: (event: string, cb: () => void) => {
+      if (event === 'connected' && connectedSubs.includes(cb)) connectedSubs.splice(connectedSubs.indexOf(cb), 1);
+    },
+    disconnect: async () => undefined,
     rpc: {
       chain: {
-        getFinalizedHead: async () => codec(hashOf(head)),
-        getHeader: async (h: { toHex(): string } | string) => header(numberOf(typeof h === 'string' ? h : h.toHex())),
+        getFinalizedHead: async () => codec(hashOf(head, tagOf(head))),
+        getHeader: async (h: { toHex(): string } | string) => hdr(numberOf(typeof h === 'string' ? h : h.toHex())),
         getBlockHash: async (n: number) => {
           assert.ok(n <= head, `block ${n} asked while the finalized head is ${head}`);
-          return codec(hashOf(n));
+          return codec(hashOf(n, tagOf(n)));
         },
         getBlock: async (h: { toHex(): string }) => {
           const n = numberOf(h.toHex());
@@ -77,7 +111,7 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
             throw new Error('connection lost');
           }
           chain.fetched.push(n);
-          return { block: { header: header(n), extrinsics: [] }, justifications: { isSome: false, isNone: true } };
+          return { block: { header: hdr(n), extrinsics: [] }, justifications: { isSome: false, isNone: true } };
         },
         subscribeFinalizedHeads: subscribe(finalizedSubs, () => head),
         subscribeNewHeads: subscribe(newSubs, () => head),
@@ -194,6 +228,122 @@ describe('Indexer', () => {
     assert.deepEqual(numbers(store), [4, 3, 2, 1, 0]);
     assert.ok(lines.some((l) => l.level === 'warn' && l.event === 'ingest_failed'));
     await indexer.stop();
+  });
+});
+
+describe('chain change', () => {
+  const tmp = (): { dir: string; db: string; done(): void } => {
+    const dir = mkdtempSync(join(tmpdir(), 'explorer-indexer-'));
+    return { dir, db: join(dir, 'explorer.db'), done: () => rmSync(dir, { recursive: true, force: true }) };
+  };
+  const baks = (dir: string): string[] => readdirSync(dir).filter((f) => f.includes('.bak') && !f.endsWith('-wal') && !f.endsWith('-shm'));
+
+  it('stops on a block whose parent is not the indexed one, logs it and does not retry', async () => {
+    const chain = fakeChain(4);
+    const store = new ExplorerStore(':memory:');
+    const { log, lines } = quiet();
+    const reasons: string[] = [];
+    const indexer = new Indexer(chain.api, store, log, { retryMs: 5, onChainChanged: (r) => reasons.push(r) });
+    await indexer.start();
+    // a testnet reset: the new chain has gone past the old head
+    chain.replace(0, 'cd', 6);
+    chain.finalize(6);
+    await until('chain change', () => reasons.length > 0);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.deepEqual(reasons, ['parent_hash']);
+    assert.equal(store.lastIndexed(), 4);
+    assert.ok(lines.some((l) => l.level === 'error' && l.event === 'chain_changed'));
+    assert.ok(!lines.some((l) => l.event === 'ingest_failed'));
+    await assert.rejects(indexer.start(), ChainChangedError);
+    await indexer.stop();
+  });
+
+  it('checks the genesis again when the provider reconnects', async () => {
+    const chain = fakeChain(4);
+    const store = new ExplorerStore(':memory:');
+    const reasons: string[] = [];
+    const indexer = new Indexer(chain.api, store, quiet().log, { onChainChanged: (r) => reasons.push(r) });
+    await indexer.start();
+    // the new chain is still below the old head: no block would ever reach the parent check
+    chain.replace(0, 'cd', 2);
+    chain.reconnect();
+    await until('chain change', () => reasons.length > 0);
+    assert.deepEqual(reasons, ['genesis']);
+    await indexer.stop();
+  });
+
+  it('says nothing on a reconnection to the same chain', async () => {
+    const chain = fakeChain(4);
+    const store = new ExplorerStore(':memory:');
+    const reasons: string[] = [];
+    const indexer = new Indexer(chain.api, store, quiet().log, { onChainChanged: (r) => reasons.push(r) });
+    await indexer.start();
+    chain.reconnect();
+    chain.finalize(6);
+    await until('block 6', () => store.lastIndexed() === 6);
+    assert.deepEqual(reasons, []);
+    await indexer.stop();
+  });
+
+  it('refuses to start on a node restored with other blocks, then rebuilds the index on the next start', async () => {
+    const t = tmp();
+    try {
+      const chain = fakeChain(4);
+      let store = new ExplorerStore(t.db);
+      const first = new Indexer(chain.api, store, quiet().log);
+      await first.start();
+      await first.stop();
+      store.close();
+
+      // same genesis, other blocks from 3 on
+      chain.replace(3, 'cd', 4);
+      store = new ExplorerStore(t.db);
+      const reasons: string[] = [];
+      const second = new Indexer(chain.api, store, quiet().log, { onChainChanged: (r) => reasons.push(r) });
+      await assert.rejects(second.start(), ChainChangedError);
+      assert.deepEqual(reasons, ['block_hash']);
+      store.close();
+
+      store = new ExplorerStore(t.db);
+      const { log, lines } = quiet();
+      const third = new Indexer(chain.api, store, log);
+      await third.start();
+      assert.ok(lines.some((l) => l.event === 'genesis_changed'));
+      assert.equal(baks(t.dir).length, 1);
+      assert.equal(store.block(3)!.hash, hashOf(3, 'cd'));
+      assert.equal(store.block(2)!.hash, hashOf(2));
+      assert.equal(store.counts().blocks, 5);
+      await third.stop();
+      store.close();
+    } finally {
+      t.done();
+    }
+  });
+
+  it('makes the explorer exit 1, and the next run starts from an empty index', async () => {
+    const t = tmp();
+    try {
+      const chain = fakeChain(4);
+      const store = new ExplorerStore(t.db);
+      const first = new Indexer(chain.api, store, quiet().log);
+      await first.start();
+      await first.stop();
+      store.close();
+
+      chain.replace(2, 'cd', 4);
+      const out: string[] = [];
+      const code = await main({ EXPLORER_DB: t.db, EXPLORER_PORT: '0', EXPLORER_HOST: '127.0.0.1' }, { connect: async () => chain.api, write: (l) => out.push(l), exit: () => undefined });
+      assert.equal(code, 1);
+      assert.ok(out.some((l) => l.includes('"chain_changed"')));
+      assert.ok(existsSync(t.db));
+
+      const again = new ExplorerStore(t.db);
+      assert.equal(again.openForGenesis(hashOf(0)).reset, true);
+      assert.equal(again.lastIndexed(), null);
+      again.close();
+    } finally {
+      t.done();
+    }
   });
 });
 

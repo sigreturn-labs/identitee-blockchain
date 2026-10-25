@@ -175,6 +175,20 @@ export interface IndexerOptions {
   /** First wait before retrying a block that failed while following; doubles up to `maxRetryMs`. */
   retryMs?: number;
   maxRetryMs?: number;
+  /** Called once the node is found on another chain than the index (the store is marked for a rebuild). */
+  onChainChanged?: (reason: string) => void;
+}
+
+/**
+ * The node no longer serves the chain in the index: a testnet reset, or a node restored from a
+ * backup that then built other blocks. The store is marked so that the next start re-indexes from
+ * scratch; the process is expected to exit and be started again.
+ */
+export class ChainChangedError extends Error {
+  constructor(readonly reason: string) {
+    super(`the node serves another chain than the index (${reason})`);
+    this.name = 'ChainChangedError';
+  }
 }
 
 export interface Heads {
@@ -195,6 +209,8 @@ export class Indexer {
   private authorityNames = new Map<number, string>();
   private readonly retryMs: number;
   private readonly maxRetryMs: number;
+  private readonly onChainChanged: ((reason: string) => void) | undefined;
+  private changed: ChainChangedError | null = null;
 
   constructor(
     private readonly api: ApiPromise,
@@ -204,6 +220,7 @@ export class Indexer {
   ) {
     this.retryMs = options.retryMs ?? 1000;
     this.maxRetryMs = options.maxRetryMs ?? 30_000;
+    this.onChainChanged = options.onChainChanged;
   }
 
   /** Called on every change of the best or finalized height. */
@@ -220,11 +237,14 @@ export class Indexer {
    * rejects if a block fails on the way), then follow finality in the background.
    */
   async start(): Promise<void> {
+    if (this.changed !== null) throw this.changed;
     this.stopped = false;
     this.starting = true;
     try {
       const genesis = lower(this.api.genesisHash);
       if (this.store.openForGenesis(genesis).reset) this.log('warn', 'genesis_changed', { genesis });
+      await this.verifyChain();
+      this.watchReconnects();
       this.unsubs.push(
         await this.api.rpc.chain.subscribeFinalizedHeads((h) => {
           this.setHeads(this.best, h.number.toNumber());
@@ -260,6 +280,49 @@ export class Indexer {
       }
     }
     await this.running;
+  }
+
+  /**
+   * Check that the node still serves the indexed chain: the same block 0, and the same hash at the
+   * highest height both have. Throws `ChainChangedError` (after marking the store) if not.
+   */
+  async verifyChain(): Promise<void> {
+    const genesis = lower(await this.api.rpc.chain.getBlockHash(0));
+    const stored = this.store.genesis();
+    if (stored !== null && genesis !== stored) this.chainChanged('genesis', { stored, node: genesis });
+    const last = this.store.lastIndexed();
+    if (last === null || last === 0) return;
+    const finalized = (await this.api.rpc.chain.getHeader(await this.api.rpc.chain.getFinalizedHead())).number.toNumber();
+    const at = Math.min(last, finalized);
+    if (at === 0) return;
+    const node = lower(await this.api.rpc.chain.getBlockHash(at));
+    const ours = this.store.block(at)?.hash;
+    if (ours !== undefined && node !== ours) this.chainChanged('block_hash', { block: at, stored: ours, node });
+  }
+
+  /** polkadot.js keeps the first genesis across reconnections: check the chain again on each one. */
+  private watchReconnects(): void {
+    const api = this.api as unknown as { on?(e: string, cb: () => void): unknown; off?(e: string, cb: () => void): unknown };
+    if (typeof api.on !== 'function') return;
+    const onConnected = (): void => {
+      this.verifyChain().catch((e: unknown) => {
+        if (!(e instanceof ChainChangedError)) this.log('warn', 'chain_check_failed', { error: e instanceof Error ? e.message : String(e) });
+      });
+    };
+    api.on('connected', onConnected);
+    this.unsubs.push(() => api.off?.('connected', onConnected));
+  }
+
+  /** Log, mark the store for a rebuild, tell the owner (once), and throw. */
+  private chainChanged(reason: string, details: Record<string, unknown>): never {
+    if (this.changed === null) {
+      this.changed = new ChainChangedError(reason);
+      this.log('error', 'chain_changed', { reason, ...details });
+      this.store.markChainChanged();
+      this.stopped = true;
+      this.onChainChanged?.(reason);
+    }
+    throw this.changed;
   }
 
   private setHeads(best: number, finalized: number): void {
@@ -300,6 +363,7 @@ export class Indexer {
           this.failures = 0;
         },
         (e: unknown) => {
+          if (e instanceof ChainChangedError) return;
           this.failures++;
           const wait = Math.min(this.retryMs * 2 ** (this.failures - 1), this.maxRetryMs);
           this.log('warn', 'ingest_failed', { block: this.next(), error: e instanceof Error ? e.message : String(e), retryInMs: wait });
@@ -328,6 +392,11 @@ export class Indexer {
     const at = await api.at(hash);
     const query = at.query as Json;
     const header = signed.block.header;
+    if (n > 0) {
+      const parent = this.store.block(n - 1)?.hash;
+      const claimed = lower(header.parentHash);
+      if (parent !== undefined && claimed !== parent) this.chainChanged('parent_hash', { block: n, stored: parent, node: claimed });
+    }
     const [records, now, setId] = (await Promise.all([query.system.events(), query.timestamp.now(), query.grandpa.currentSetId()])) as [
       EventRecord[],
       { toNumber(): number },

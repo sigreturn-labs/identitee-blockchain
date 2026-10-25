@@ -407,9 +407,7 @@ repository.
 The database is derived data, so it is not in the backup (`deploy/backup.sh` archives
 `/etc/identitee`, hence the two optional files, and no explorer state). To rebuild it, stop the
 service, delete `explorer.db` with its `-wal` and `-shm` files, and start it: the service indexes from
-genesis again. The API answers meanwhile with what is indexed so far. Do the same after restoring the
-node from an archive (see "Restoring"): the indexer does not compare parent hashes, so an index kept
-across a restore would hold blocks the restored chain no longer has.
+genesis again. The API answers meanwhile with what is indexed so far.
 
 ```bash
 sudo systemctl stop identitee-explorer
@@ -417,9 +415,15 @@ sudo rm -f /var/lib/identitee-explorer/explorer.db*
 sudo systemctl start identitee-explorer
 ```
 
-After a chain reset (see "Resetting the chain") the service sees a new genesis hash, moves the old file
-aside as `explorer.db.<first 8 hex digits of the old genesis>.bak` and indexes the new chain from
-block 0. The old history is not browsable; delete the `.bak` file when it is no longer wanted.
+The service rebuilds its index by itself when the node no longer serves the indexed chain: after a
+chain reset (see "Resetting the chain"), or after the node was restored from an archive and built other
+blocks than the index holds (see "Restoring"). It checks the chain at startup and each time it
+reconnects to the node (block 0, and the hash of the highest block both have), and checks that each new
+block's parent is the indexed block before it. On a mismatch it logs `chain_changed`, marks the
+database, stops and exits 1; systemd starts it again 15 s later (`Restart=on-failure`), and the new
+start moves the old file aside as `explorer.db.<first 8 hex digits of the old genesis>.bak` and indexes
+the chain from block 0. The API is down for those 15 s, then serves the new index as it grows. The old
+history is not browsable; delete the `.bak` file when it is no longer wanted.
 
 nginx limits each address to 10 requests per second (bursts of 40, then 429) and to 10 open live
 streams, and refuses any method other than GET. The streams (`/api/live`) are not buffered, and the
@@ -435,7 +439,8 @@ Logs are one JSON object per line (`journalctl -u identitee-explorer -o cat`). S
 | `fatal` | The service could not start (port taken, database not writable) and exited |
 | `indexer_failed` | Catch-up was interrupted; retried with a wait that doubles from 1 s to 30 s |
 | `ingest_failed` | One block could not be decoded or stored; retried with a growing wait. A block that keeps failing holds the index at that block, and the message says why |
-| `genesis_changed` | The node is another chain: the old index was moved aside and a new one started |
+| `chain_changed` | The node serves other blocks than the index (reset or restore): the database is marked and the service exits 1, to be started again by systemd |
+| `genesis_changed` | At startup, after a `chain_changed` or with a node on another genesis: the old index was moved aside and a new one started |
 | `request_failed` | An API request ended in an internal error (the client gets a 500) |
 
 A node restart does not need an explorer restart: polkadot.js reconnects, and `/api/status` says
@@ -513,8 +518,9 @@ them.
    only if the keystore is missing.
 5. Install the units, the backup script and the timer, then
    `sudo systemctl daemon-reload && sudo systemctl enable --now identitee-node identitee-migrator identitee-verifier identitee-explorer identitee-backup.timer`;
-   set up nginx and TLS. The explorer is not in the archive and step 3 removed its old index, which
-   holds blocks that no longer exist after a restore: it indexes the restored chain from genesis.
+   set up nginx and TLS. The explorer is not in the archive and step 3 removed its old index: it
+   indexes the restored chain from genesis. (An index kept by mistake would be detected and rebuilt
+   anyway, see "The explorer".)
 6. Check that the node resumes from the block in `.info` and finalizes, that both agents log their
    capabilities, and that `check-testnet.ts` returns `RESULT OK`.
 
@@ -576,7 +582,9 @@ old chain.
    agents must exist in the new genesis: each checks its capabilities at startup and stops otherwise.
 4. Commit the new chain spec.
 
-The explorer needs no action after a reset: it moves its old index aside and indexes the new chain.
+The explorer rebuilds its index by itself after a reset (see "The explorer"): it logs `chain_changed`,
+exits 1, and once systemd has started it again it moves the old index aside and indexes the new chain.
+Check with `curl -s https://<api host>/api/status` that `genesis` is the new hash and `indexed` climbs.
 
 The verifier's `verifier.db` survives a reset, including the register of KYC documents (one document,
 one address). To start afresh, stop the verifier and move `verifier.db` aside; the `.key` files and

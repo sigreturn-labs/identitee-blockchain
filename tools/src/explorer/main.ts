@@ -7,6 +7,9 @@
 // and while it is away, /api/status says `node: "down"`. The WebSocket provider reconnects by
 // itself; an indexer start that fails (catch-up interrupted) is retried in-process with a growing
 // wait. SIGTERM or SIGINT: stops the indexer, then the HTTP server, then closes the store, exits 0.
+// If the node turns out to serve another chain than the index (a testnet reset, a restored node),
+// the indexer marks the store and the process stops the same way but exits 1: systemd starts it
+// again and the new start moves the old index aside and rebuilds it.
 // Logs are one JSON object per line on stdout.
 
 import { mkdirSync } from 'node:fs';
@@ -18,7 +21,7 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import { makeLogger, messageOf, watchSignals, type Logger } from '../migrator.ts';
 import { chainLive, ExplorerApi } from './api.ts';
 import { parseConfig, type ExplorerConfig } from './config.ts';
-import { Indexer } from './indexer.ts';
+import { ChainChangedError, Indexer } from './indexer.ts';
 import { ExplorerStore } from './store.ts';
 
 const STOP_WAIT_MS = 30_000;
@@ -31,7 +34,8 @@ export interface KeepIndexingOptions {
 
 /**
  * Run `start` until it resolves (the indexer is caught up and follows on its own); after each
- * rejection, log it and wait 1 s, doubling up to 30 s. `stop()` ends the retries.
+ * rejection, log it and wait 1 s, doubling up to 30 s. `stop()` ends the retries; a
+ * `ChainChangedError` ends them too, since starting again on the same index cannot help.
  */
 export function keepIndexing(start: () => Promise<void>, log: Logger, options: KeepIndexingOptions = {}): { done: Promise<void>; stop(): void } {
   const retryMs = options.retryMs ?? 1000;
@@ -54,6 +58,7 @@ export function keepIndexing(start: () => Promise<void>, log: Logger, options: K
         await start();
         return;
       } catch (e) {
+        if (e instanceof ChainChangedError) return;
         failures++;
         const wait = Math.min(retryMs * 2 ** (failures - 1), maxRetryMs);
         log('warn', 'indexer_failed', { error: messageOf(e), retryInMs: wait });
@@ -118,6 +123,7 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
   let indexer: Indexer | undefined;
   let loop: ReturnType<typeof keepIndexing> | undefined;
   let signal: string;
+  let chainChanged = false;
 
   const first = await Promise.race([connecting.then((connected) => ({ connected }), (e: unknown) => ({ failed: e })), signals.stopped.then((s) => ({ signal: s }))]);
   if ('signal' in first) {
@@ -131,14 +137,17 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
   } else {
     api = first.connected;
     log('info', 'connected', { node: cfg.node, genesis: api.genesisHash.toHex() });
-    indexer = new Indexer(api, store, log);
+    let changed: () => void = () => undefined;
+    const onChange = new Promise<string>((resolve) => (changed = () => resolve('chain_changed')));
+    indexer = new Indexer(api, store, log, { onChainChanged: () => changed() });
     server.attach(chainLive(api, cfg.labels), indexer);
     const running = indexer;
     loop = keepIndexing(() => running.start(), log);
-    signal = await signals.stopped;
+    signal = await Promise.race([signals.stopped, onChange]);
+    chainChanged = signal === 'chain_changed';
   }
 
-  log('info', 'stopping', { signal });
+  log(chainChanged ? 'warn' : 'info', 'stopping', chainChanged ? { reason: signal } : { signal });
   signals.stopping();
   loop?.stop();
   await indexer?.stop();
@@ -150,7 +159,7 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
   await api?.disconnect().catch(() => undefined);
   store.close();
   log('info', 'stopped');
-  return 0;
+  return chainChanged ? 1 : 0;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
