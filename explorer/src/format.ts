@@ -32,3 +32,6 @@ export function shortHash(h: string): string {
 
 /** `1,234,567` */
 export const formatNumber = (n: number): string => group(String(n));
+
+/** `2026-10-25 13:46:40 UTC` */
+export const formatTime = (ms: number): string => `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;

@@ -22,7 +22,8 @@ export async function get<T>(path: string): Promise<T> {
   } catch {
     throw new ApiError(0, "network");
   }
-  const body: unknown = await response.json().catch(() => null);
+  const body: unknown = await response.json().catch(() => undefined);
+  if (response.ok && body === undefined) throw new ApiError(response.status, "bad_response");
   if (!response.ok) {
     const code = typeof body === "object" && body !== null && typeof (body as { error?: unknown }).error === "string" ? (body as { error: string }).error : "unknown";
     throw new ApiError(response.status, code);
@@ -32,10 +33,13 @@ export async function get<T>(path: string): Promise<T> {
 
 export type Head = { best: number; finalized: number; indexed: number | null };
 
-/** Calls `onHead` with every head the API pushes, reconnecting after a failure (1 s, doubling up to
- * 30 s, back to 1 s once a head arrives). Returns the function that stops it. */
-export function live(onHead: (head: Head) => void): () => void {
-  if (typeof EventSource === "undefined") return () => {};
+// One stream per tab, however many components listen: it opens with the first listener and
+// closes with the last.
+const listeners = new Set<(head: Head) => void>();
+let lastHead: Head | null = null;
+let closeStream: (() => void) | null = null;
+
+function openStream(): () => void {
   let source: EventSource | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let wait = 1_000;
@@ -43,17 +47,21 @@ export function live(onHead: (head: Head) => void): () => void {
   const open = () => {
     source = new EventSource(`${API}/api/live`);
     source.addEventListener("head", (e) => {
+      let head: Head;
       try {
-        onHead(JSON.parse((e as MessageEvent<string>).data) as Head);
-        wait = 1_000;
+        head = JSON.parse((e as MessageEvent<string>).data) as Head;
       } catch {
-        // a line that is not a head is skipped
+        return; // a line that is not a head is skipped
       }
+      wait = 1_000;
+      lastHead = head;
+      for (const listener of [...listeners]) listener(head);
     });
     source.onerror = () => {
       source?.close();
       if (stopped) return;
-      timer = setTimeout(open, wait);
+      // jittered, so that clients dropped together do not come back together
+      timer = setTimeout(open, wait * (0.5 + Math.random() * 0.5));
       wait = Math.min(wait * 2, 30_000);
     };
   };
@@ -62,6 +70,27 @@ export function live(onHead: (head: Head) => void): () => void {
     stopped = true;
     clearTimeout(timer);
     source?.close();
+  };
+}
+
+/** Calls `onHead` with every head the API pushes (at once with the last one, if the stream is
+ * already open), reconnecting after a failure (1 s, doubling up to 30 s, jittered, back to 1 s once
+ * a head arrives). Returns the function that stops listening. */
+export function live(onHead: (head: Head) => void): () => void {
+  if (typeof EventSource === "undefined") return () => {};
+  listeners.add(onHead);
+  if (closeStream === null) closeStream = openStream();
+  else if (lastHead !== null) onHead(lastHead);
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    listeners.delete(onHead);
+    if (listeners.size === 0) {
+      closeStream?.();
+      closeStream = null;
+      lastHead = null;
+    }
   };
 }
 

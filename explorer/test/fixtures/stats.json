@@ -1,0 +1,11 @@
+{
+  "blocks": 1241,
+  "extrinsics": 1260,
+  "events": 2530,
+  "accounts": 4,
+  "transfers": 6,
+  "attestations": 3,
+  "migrations": 0,
+  "usernames": 2,
+  "authorities": 1
+}

@@ -136,6 +136,356 @@
   overflow-wrap: anywhere;
 }
 
+.x-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+.x-page > .note {
+  max-width: 68ch;
+}
+.x-quiet {
+  color: var(--ink-3);
+}
+.x-hash,
+.x-num {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.x-main a:not(.button) {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.x-main a:not(.button):hover {
+  text-decoration-color: var(--ink);
+}
+
+/* Sections: a heading, its way to the full list, then the content */
+.x-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.x-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.x-section h2,
+.x-card h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.x-main a.x-all {
+  font-size: 12px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.x-main a.x-all:hover {
+  color: var(--ink);
+}
+.x-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 40px;
+}
+
+/* Home: the three heights, then the counters, in one ruled band each */
+.x-heads,
+.x-counters {
+  margin: 0;
+  display: grid;
+  border-block: 1px solid var(--line);
+}
+.x-heads {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.x-counters {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 0;
+  margin-top: -28px;
+}
+.x-heads > div,
+.x-counters > div {
+  padding: 14px 16px 14px 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.x-heads dt,
+.x-counters dt {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.x-heads dd,
+.x-counters dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.x-heads dd {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  min-height: 28px;
+}
+.x-main .x-heads a {
+  text-decoration: none;
+}
+.x-main .x-heads a:hover {
+  text-decoration: underline;
+}
+.x-counters dd {
+  font-size: 15px;
+}
+.x-bone-num {
+  display: inline-block;
+  width: 72px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+/* Tables: rows ruled like the field rows of identit.ee */
+.x-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.x-table th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 0 12px 8px 0;
+  white-space: nowrap;
+}
+.x-table td {
+  padding: 11px 12px 11px 0;
+  border-top: 1px solid var(--line);
+  vertical-align: baseline;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.x-table th:last-child,
+.x-table td:last-child {
+  padding-right: 0;
+}
+.x-table .x-end {
+  text-align: right;
+}
+.x-table td.x-wide {
+  width: 50%;
+}
+.x-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.x-account-avatar {
+  display: inline-flex;
+}
+.x-callname {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.x-inner {
+  color: var(--ink-2);
+}
+.x-failed {
+  font-weight: 500;
+}
+.x-pending {
+  color: var(--ink-2);
+}
+
+/* Lists: skeleton, empty, Load more */
+.x-skeleton {
+  display: grid;
+  gap: 1px;
+}
+.x-bone-row {
+  height: 40px;
+  border-radius: 4px;
+  opacity: 0.6;
+}
+.x-empty {
+  margin: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.x-more {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* A card for what could not be shown */
+.x-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+
+/* Detail fields: the rows of identit.ee, with a label column wide enough for "Extrinsics root" */
+.x-fields .row {
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+.x-fields .row dt::first-letter {
+  text-transform: none;
+}
+.x-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -12px;
+}
+.x-pager a[rel="next"] {
+  margin-left: auto;
+}
+.x-result {
+  display: grid;
+  gap: 4px;
+}
+.x-error-docs {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+/* Decoded calls: arguments under their call, nested calls indented under a rule */
+.x-call {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.x-call .x-call {
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.x-call-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.x-args {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.x-arg {
+  display: grid;
+  grid-template-columns: minmax(80px, 160px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.x-arg dt {
+  color: var(--ink-3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.x-arg dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.x-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+/* Home feed of identity events */
+.x-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.x-feed li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 20px;
+  padding-block: 11px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.x-sentence {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.x-feed-meta {
+  display: flex;
+  gap: 14px;
+  flex: none;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Account */
+.x-account-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+.x-account-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.x-roles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.x-profile {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.x-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: -16px;
+}
+.x-tabs button {
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  padding: 10px 0;
+  min-height: 44px;
+  cursor: pointer;
+}
+.x-tabs button:hover {
+  color: var(--ink);
+}
+.x-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
+}
+
 /* Footer */
 .x-foot {
   display: flex;
@@ -153,6 +503,61 @@
   color: var(--ink);
 }
 
+@media (max-width: 900px) {
+  .x-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .x-counters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* On a phone each table row becomes a small block: one line per cell, under its label */
+@media (max-width: 640px) {
+  .x-table thead {
+    display: none;
+  }
+  .x-table,
+  .x-table tbody,
+  .x-table tr,
+  .x-table td {
+    display: block;
+  }
+  .x-table tr {
+    padding-block: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .x-table td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    border-top: 0;
+    padding: 3px 0;
+  }
+  .x-table td::before {
+    content: attr(data-label);
+    color: var(--ink-3);
+    font-size: 12px;
+  }
+  .x-table .x-end {
+    text-align: left;
+  }
+  .x-table td.x-wide {
+    width: auto;
+  }
+  .x-fields .row {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .x-arg {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .x-feed li {
+    flex-direction: column;
+  }
+  .x-heads dd {
+    font-size: 18px;
+  }
+}
 @media (max-width: 760px) {
   .x-top {
     grid-template-columns: minmax(0, 1fr) auto;

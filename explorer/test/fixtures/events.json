@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "id": "1237-1",
+      "block": 1237,
+      "index": 1,
+      "extrinsicIndex": 1,
+      "pallet": "identitee",
+      "method": "NameAssigned",
+      "data": {
+        "name": "bob",
+        "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc"
+      },
+      "sentence": "Name bob assigned to idq6mN…dHGiUc",
+      "timestamp": 1761407422000
+    },
+    {
+      "id": "1235-1",
+      "block": 1235,
+      "index": 1,
+      "extrinsicIndex": 1,
+      "pallet": "identitee",
+      "method": "FieldAttested",
+      "data": {
+        "who": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+        "authority": 0,
+        "key": "Email"
+      },
+      "sentence": "Email attested for idrfve…YX3ogk by identitee",
+      "timestamp": 1761407410000
+    }
+  ],
+  "next": null
+}

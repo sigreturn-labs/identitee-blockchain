@@ -9,7 +9,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   return {
     plugins: [preact()],
-    resolve: { alias: { "@web": fileURLToPath(new URL("../web/src", import.meta.url)) } },
+    // one Preact for both trees: the components imported from web/ would otherwise bring their own
+    resolve: { alias: { "@web": fileURLToPath(new URL("../web/src", import.meta.url)) }, dedupe: ["preact"] },
     server: { fs: { allow: [".."] } },
     // the same icon, and the same single-page fallback (_redirects) on Cloudflare Pages
     publicDir: "../web/public",

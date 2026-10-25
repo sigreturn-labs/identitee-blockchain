@@ -1,0 +1,298 @@
+// @vitest-environment happy-dom
+import { render } from "preact";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App } from "../src/app.tsx";
+import { Value } from "../src/ui/value.tsx";
+import { LocationProvider } from "preact-iso";
+import { FakeEventSource } from "./support/no-network.ts";
+import account from "./fixtures/account.json";
+import block from "./fixtures/block.json";
+import blocks from "./fixtures/blocks.json";
+import events from "./fixtures/events.json";
+import extrinsicFailed from "./fixtures/extrinsic-failed.json";
+import extrinsicSudo from "./fixtures/extrinsic-sudo.json";
+import extrinsics from "./fixtures/extrinsics.json";
+import historyPage2 from "./fixtures/history-2.json";
+import historyPage from "./fixtures/history.json";
+import network from "./fixtures/network.json";
+import stats from "./fixtures/stats.json";
+import status from "./fixtures/status.json";
+import transfers from "./fixtures/transfers.json";
+
+const ALICE = "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk";
+const BOB = "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc";
+const ALICE_ED = "0x88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee";
+
+const waitFor = <T,>(check: () => T): Promise<T> => vi.waitFor(check, { timeout: 2_000, interval: 10 });
+
+type Answer = unknown | { status: number; body: unknown };
+const failing = (status: number, error: string) => ({ status, body: { error } });
+
+/** Answers the API by path: `/api/blocks?limit=10` first, then `/api/blocks`. Anything else is a
+ * 404. Returns the requested paths. */
+function serve(routes: Record<string, Answer>): string[] {
+  const asked: string[] = [];
+  globalThis.fetch = vi.fn((input: string) => {
+    const url = new URL(input);
+    const path = `${url.pathname}${url.search}`;
+    asked.push(path);
+    const found = path in routes ? routes[path] : routes[url.pathname];
+    const { status, body } =
+      found === undefined
+        ? failing(404, "not_found")
+        : typeof found === "object" && found !== null && "status" in found && "body" in found
+          ? (found as { status: number; body: unknown })
+          : { status: 200, body: found };
+    return Promise.resolve(new Response(JSON.stringify(body), { status }));
+  }) as unknown as typeof fetch;
+  return asked;
+}
+
+const COMMON = { "/api/status": status, "/api/network": network };
+
+let root: HTMLElement;
+beforeEach(() => {
+  root = document.createElement("div");
+  document.body.append(root);
+});
+afterEach(() => {
+  render(null, root);
+  root.remove();
+});
+
+function open(path: string) {
+  history.replaceState(null, "", path);
+  render(<App />, root);
+}
+
+const main = () => root.querySelector("main")!;
+const text = () => main().textContent ?? "";
+const expectClean = () => expect(root.textContent).not.toMatch(/[·—]/);
+
+describe("Home", () => {
+  it("shows the heads, the counters, the latest blocks, signed extrinsics and identitee events, and follows the live head", async () => {
+    const asked = serve({
+      ...COMMON,
+      "/api/stats": stats,
+      "/api/blocks": blocks,
+      "/api/extrinsics": extrinsics,
+      "/api/events": events,
+    });
+    open("/");
+    await waitFor(() => expect(text()).toContain("Name bob assigned to idq6mN…dHGiUc"));
+    const latest = main().querySelector('[aria-label="Latest blocks"]')!;
+    await waitFor(() => expect(latest.textContent).toContain("1,240"));
+    expect(latest.textContent).toContain("identitee-01");
+    expect(text()).toContain("Accounts");
+    expect(asked).toContain("/api/blocks?limit=10");
+    expect(asked).toContain("/api/events?pallet=identitee&limit=10");
+    // only signed extrinsics: the timestamp inherent is left out
+    const xts = main().querySelector('[aria-label="Latest extrinsics"]')!;
+    await waitFor(() => expect(xts.textContent).toContain("identitee.claim_name"));
+    expect(xts.textContent).not.toContain("timestamp.set");
+    expectClean();
+
+    const next = { ...blocks, items: [{ ...blocks.items[0]!, number: 1241 }, ...blocks.items] };
+    serve({ ...COMMON, "/api/stats": stats, "/api/blocks": next, "/api/extrinsics": extrinsics, "/api/events": events });
+    FakeEventSource.instances.at(-1)!.emit("head", '{"best":1241,"finalized":1238,"indexed":1241}');
+    await waitFor(() => expect(latest.textContent).toContain("1,241"));
+    await waitFor(() => expect(main().querySelector('[aria-label="Heads"]')?.textContent).toContain("1,238"));
+  });
+
+  it("shows an error card when the API is down", async () => {
+    open("/");
+    await waitFor(() => expect(text()).toContain("The explorer API is not answering"));
+    expectClean();
+  });
+});
+
+describe("Block", () => {
+  it("shows its fields, who produced it and the GRANDPA set that finalized it", async () => {
+    serve({ ...COMMON, "/api/block/1236": block });
+    open("/block/1236");
+    await waitFor(() => expect(root.querySelector("h1")?.textContent).toBe("Block 1,236"));
+    const row = (label: string) => [...main().querySelectorAll(".x-fields .row")].find((r) => r.querySelector("dt")?.textContent === label)?.querySelector("dd")?.textContent;
+    await waitFor(() => expect(row("Produced by")).toBe("identitee-01"));
+    await waitFor(() => expect(row("Finalized by")).toBe("GRANDPA authority set #0: identitee-01"));
+    expect(row("Hash")).toContain(block.hash);
+    expect(main().querySelector('[aria-label="Extrinsics"]')?.textContent).toContain("balances.transfer_keep_alive");
+    expect(main().querySelector('[aria-label="Events"]')?.textContent).toContain("1 IDT sent from");
+    expect(main().querySelector('a[rel="prev"]')?.getAttribute("href")).toBe("/block/1235");
+    expect(main().querySelector('a[rel="next"]')?.getAttribute("href")).toBe("/block/1237");
+    expectClean();
+  });
+
+  it("names the GRANDPA signers when the block carries a justification", async () => {
+    serve({ ...COMMON, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    open("/block/1024");
+    await waitFor(() => expect(text()).toContain("Signed by identitee-01"));
+    expect(text()).not.toContain("GRANDPA authority set");
+  });
+
+  it("falls back to short keys when the labels are unknown", async () => {
+    serve({ "/api/status": status, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    open("/block/1024");
+    await waitFor(() => expect(text()).toContain("Signed by 0x88dc34…a6b0ee"));
+    expect(text()).toContain("0xd43593…6da27d");
+  });
+
+  it("marks a block above the finalized head", async () => {
+    serve({ ...COMMON, "/api/block/1240": { ...block, number: 1240 } });
+    open("/block/1240");
+    await waitFor(() => expect(text()).toContain("Not finalized yet"));
+    expect(main().querySelector('a[rel="next"]')).toBeNull();
+    // the header and the page follow the head on the same stream
+    expect(FakeEventSource.instances).toHaveLength(1);
+  });
+
+  it("renders a not-found card for a block the API does not know", async () => {
+    serve(COMMON);
+    open("/block/99999");
+    await waitFor(() => expect(main().querySelector(".x-card")?.textContent).toContain("Not found"));
+    expect(text()).toContain("No block 99999");
+    expectClean();
+  });
+});
+
+describe("Extrinsic", () => {
+  it("shows a failed result with the error and its docs", async () => {
+    serve({ ...COMMON, "/api/extrinsic/1239-1": extrinsicFailed });
+    open("/extrinsic/1239-1");
+    await waitFor(() => expect(text()).toContain("Failed"));
+    expect(text()).toContain("identitee.NameTaken");
+    expect(text()).toContain("The name is held by another account.");
+    expect(text()).toContain("0.000098 IDT");
+    expect(main().querySelector(`a[href="/account/${BOB}"]`)).not.toBeNull();
+    expectClean();
+  });
+
+  it("renders a nested call with its arguments and address links", async () => {
+    serve({ ...COMMON, "/api/extrinsic/1237-1": extrinsicSudo });
+    open("/extrinsic/1237-1");
+    await waitFor(() => expect(text()).toContain("identitee.set_username_for"));
+    const call = main().querySelector('[aria-label="Call"]')!;
+    expect(call.querySelector(".x-call .x-call")).not.toBeNull();
+    expect(call.querySelector(`a[href="/account/${BOB}"]`)?.textContent).toBe("idq6mN…dHGiUc");
+    expect(main().querySelector('[aria-label="Events"]')?.textContent).toContain("Name bob assigned");
+    expectClean();
+  });
+
+  it("lists every inclusion of a hash found more than once", async () => {
+    const hash = extrinsics.items[2]!.hash;
+    serve({ ...COMMON, [`/api/extrinsic/${hash}`]: { matches: [extrinsics.items[2], { ...extrinsics.items[2], id: "1100-1", block: 1100 }] } });
+    open(`/extrinsic/${hash}`);
+    await waitFor(() => expect(text()).toContain("included 2 times"));
+    expect(main().querySelector('a[href="/extrinsic/1100-1"]')).not.toBeNull();
+  });
+});
+
+describe("Account", () => {
+  it("shows balances, the identity with its trust badge, roles and the profile link", async () => {
+    serve({ ...COMMON, [`/api/account/${ALICE}`]: account, [`/api/account/${ALICE}/history`]: historyPage, [`/api/account/${ALICE}/transfers`]: transfers });
+    open(`/account/${ALICE}`);
+    await waitFor(() => expect(text()).toContain("Alice"));
+    expect(main().querySelector('svg[aria-label="Fully Verified"]')).not.toBeNull();
+    expect(text()).toContain("1,152,921.504606846976 IDT");
+    expect(text()).toContain("@alice");
+    expect(text()).toContain("Sudo");
+    expect(text()).toContain("Agent of identitee");
+    const profile = main().querySelector<HTMLAnchorElement>('a[href="https://identit.ee/alice"]')!;
+    expect(profile.textContent).toBe("View profile on identit.ee");
+    expect(text()).toContain("identit.ee is in restricted access");
+    expectClean();
+  });
+
+  it("pages through the history, and switches to transfers", async () => {
+    const asked = serve({
+      ...COMMON,
+      [`/api/account/${ALICE}`]: account,
+      [`/api/account/${ALICE}/history?limit=25`]: historyPage,
+      [`/api/account/${ALICE}/history?limit=25&cursor=1235-e-1`]: historyPage2,
+      [`/api/account/${ALICE}/transfers?limit=25`]: transfers,
+    });
+    open(`/account/${ALICE}`);
+    const list = await waitFor(() => {
+      const l = main().querySelector('[aria-label="History"]');
+      expect(l?.textContent).toContain("balances.transfer_keep_alive");
+      return l!;
+    });
+    expect(list.textContent).toContain("Email attested for");
+    const more = [...main().querySelectorAll("button")].find((b) => b.textContent === "Load more")!;
+    more.click();
+    await waitFor(() => expect(main().querySelector('[aria-label="History"]')?.textContent).toContain("sudo.sudo"));
+    expect(main().querySelector('[aria-label="History"]')?.textContent).toContain("balances.transfer_keep_alive");
+    expect([...main().querySelectorAll("button")].some((b) => b.textContent === "Load more")).toBe(false);
+    expect(asked).toContain(`/api/account/${ALICE}/history?limit=25&cursor=1235-e-1`);
+
+    [...main().querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === "Transfers")!.click();
+    await waitFor(() => expect(main().querySelector('[aria-label="Transfers"]')?.textContent).toContain("1 IDT"));
+  });
+
+  it("says what is missing while the node is away", async () => {
+    serve({
+      ...COMMON,
+      [`/api/account/${BOB}`]: { ...account, address: BOB, balance: null, nonce: null, identity: null, roles: null, node: "down" },
+      [`/api/account/${BOB}/history`]: { items: [], next: null },
+    });
+    open(`/account/${BOB}`);
+    await waitFor(() => expect(text()).toContain("The node is not answering"));
+    await waitFor(() => expect(text()).toContain("No activity for this account yet."));
+  });
+});
+
+describe("Lists", () => {
+  it("pages the blocks with Load more", async () => {
+    serve({ ...COMMON, "/api/blocks?limit=25": blocks, "/api/blocks?limit=25&cursor=1237": { items: [{ ...blocks.items[2]!, number: 1237 }], next: null } });
+    open("/blocks");
+    await waitFor(() => expect(text()).toContain("1,238"));
+    [...main().querySelectorAll("button")].find((b) => b.textContent === "Load more")!.click();
+    await waitFor(() => expect(text()).toContain("1,237"));
+    expectClean();
+  });
+
+  it("lists extrinsics with their result", async () => {
+    serve({ ...COMMON, "/api/extrinsics": extrinsics });
+    open("/extrinsics");
+    await waitFor(() => expect(text()).toContain("identitee.claim_name"));
+    expect(text()).toContain("Failed");
+    expect(text()).toContain("sudo.sudo");
+    expect(text()).toContain("identitee.set_username_for");
+    expectClean();
+  });
+
+  it("shows an empty state", async () => {
+    serve({ ...COMMON, "/api/events": { items: [], next: null } });
+    open("/events");
+    await waitFor(() => expect(text()).toContain("No events yet."));
+  });
+
+  it("shows a skeleton while loading and an error card when the node is down", async () => {
+    let answer: (r: Response) => void = () => {};
+    globalThis.fetch = vi.fn(() => new Promise<Response>((resolve) => (answer = resolve))) as unknown as typeof fetch;
+    open("/events");
+    await waitFor(() => expect(main().querySelector('[aria-busy="true"]')).not.toBeNull());
+    answer(new Response(JSON.stringify({ error: "node_down" }), { status: 503 }));
+    serve({ "/api/events": failing(503, "node_down") });
+    render(null, root);
+    open("/events");
+    await waitFor(() => expect(text()).toContain("The node behind the explorer is not answering"));
+  });
+});
+
+describe("Value", () => {
+  it("formats balances, links addresses and indents nested calls", () => {
+    render(
+      <LocationProvider>
+        <Value value={{ dest: ALICE, value: "1500000000000", keep: true, note: null, list: [1, 2], call: { pallet: "system", method: "remark", args: { remark: "hi" } } }} />
+      </LocationProvider>,
+      root,
+    );
+    expect(root.textContent).toContain("1.5 IDT");
+    expect(root.querySelector(`a[href="/account/${ALICE}"]`)).not.toBeNull();
+    expect(root.querySelector(".x-call")?.textContent).toContain("system.remark");
+    expect(root.textContent).toContain("hi");
+    expect(root.textContent).toContain("Yes");
+    expect(root.textContent).toContain("None");
+    expectClean();
+  });
+});

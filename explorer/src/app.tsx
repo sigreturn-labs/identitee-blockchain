@@ -1,4 +1,11 @@
 import { LocationProvider, Route, Router, useRoute } from "preact-iso";
+import { Account } from "./pages/account.tsx";
+import { Block } from "./pages/block.tsx";
+import { Blocks } from "./pages/blocks.tsx";
+import { Events } from "./pages/events.tsx";
+import { Extrinsic } from "./pages/extrinsic.tsx";
+import { Extrinsics } from "./pages/extrinsics.tsx";
+import { Home } from "./pages/home.tsx";
 import { Layout } from "./ui/layout.tsx";
 
 // Placeholder pages until each page is written: the title of the page and the id it was given.
@@ -15,13 +22,13 @@ function Placeholder({ title, param }: { title: string; param?: string }) {
 const page = (title: string, param?: string) => () => <Placeholder title={title} param={param} />;
 
 const ROUTES: Array<[path: string, component: () => preact.JSX.Element]> = [
-  ["/", page("Overview")],
-  ["/blocks", page("Blocks")],
-  ["/block/:id", page("Block", "id")],
-  ["/extrinsics", page("Extrinsics")],
-  ["/extrinsic/:id", page("Extrinsic", "id")],
-  ["/events", page("Events")],
-  ["/account/:address", page("Account", "address")],
+  ["/", Home],
+  ["/blocks", Blocks],
+  ["/block/:id", Block],
+  ["/extrinsics", Extrinsics],
+  ["/extrinsic/:id", Extrinsic],
+  ["/events", Events],
+  ["/account/:address", Account],
   ["/authorities", page("Authorities")],
   ["/authority/:id", page("Authority", "id")],
   ["/attestations", page("Attestations")],

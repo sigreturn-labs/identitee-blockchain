@@ -1,0 +1,32 @@
+{
+  "address": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+  "publicKey": "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+  "balance": {
+    "free": "1152921504606846976",
+    "reserved": "2000000000000",
+    "frozen": "0"
+  },
+  "nonce": 5,
+  "identity": {
+    "display": "Alice",
+    "username": "alice",
+    "trust": "FullyVerified"
+  },
+  "roles": {
+    "sudo": true,
+    "validator": true,
+    "agent": [
+      {
+        "authority": 0,
+        "name": "identitee",
+        "capabilities": 3,
+        "capabilityNames": [
+          "Attest",
+          "Revoke"
+        ]
+      }
+    ]
+  },
+  "profileUrl": "https://identit.ee/alice",
+  "node": "up"
+}

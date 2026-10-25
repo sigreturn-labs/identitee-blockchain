@@ -1,0 +1,56 @@
+{
+  "id": "1237-1",
+  "block": 1237,
+  "index": 1,
+  "hash": "0xa10004d5a10004d5a10004d5a10004d5a10004d5a10004d5a10004d5a10004d5",
+  "pallet": "sudo",
+  "method": "sudo",
+  "signer": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+  "nonce": 3,
+  "tip": "0",
+  "fee": "110000000",
+  "success": true,
+  "error": null,
+  "timestamp": 1761407422000,
+  "args": {
+    "call": {
+      "pallet": "identitee",
+      "method": "set_username_for",
+      "args": {
+        "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+        "name": "bob"
+      }
+    }
+  },
+  "events": [
+    {
+      "id": "1237-1",
+      "block": 1237,
+      "index": 1,
+      "extrinsicIndex": 1,
+      "pallet": "identitee",
+      "method": "NameAssigned",
+      "data": {
+        "name": "bob",
+        "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc"
+      },
+      "sentence": "Name bob assigned to idq6mN…dHGiUc",
+      "timestamp": 1761407422000
+    },
+    {
+      "id": "1237-2",
+      "block": 1237,
+      "index": 2,
+      "extrinsicIndex": 1,
+      "pallet": "sudo",
+      "method": "Sudid",
+      "data": {
+        "sudo_result": {
+          "Ok": null
+        }
+      },
+      "sentence": "Sudo call succeeded",
+      "timestamp": 1761407422000
+    }
+  ]
+}

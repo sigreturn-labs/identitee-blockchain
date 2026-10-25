@@ -17,6 +17,12 @@ afterEach(() => {
   root.remove();
 });
 
+/** Answers /api/status with `body`, and anything else with a 404. */
+function status(body: unknown) {
+  globalThis.fetch = ((url: string) =>
+    Promise.resolve(url.endsWith("/api/status") ? new Response(JSON.stringify(body)) : new Response('{"error":"not_found"}', { status: 404 }))) as typeof fetch;
+}
+
 function open(path: string) {
   history.replaceState(null, "", path);
   render(<App />, root);
@@ -27,6 +33,7 @@ describe("Layout", () => {
     open("/blocks");
     await waitFor(() => expect(root.querySelector("h1")?.textContent).toBe("Blocks"));
     expect(root.querySelector(".mark")?.textContent).toBe("identit.eeExplorer");
+    expect(root.querySelector(".mark")?.getAttribute("aria-label")).toBe("identit.ee Explorer");
     expect(root.querySelector(".x-net")?.textContent).toBe("Testnet");
     expect([...root.querySelectorAll(".x-nav a")].map((a) => a.textContent)).toEqual(SECTIONS.map(([label]) => label));
     expect(root.querySelector('.x-nav a[aria-current="page"]')?.textContent).toBe("Blocks");
@@ -38,7 +45,7 @@ describe("Layout", () => {
   });
 
   it("follows the finalized height on the live stream", async () => {
-    globalThis.fetch = (() => Promise.resolve(new Response(JSON.stringify({ best: 1236, finalized: 1234, indexed: 1236, node: "up", specVersion: 1, genesis: null })))) as typeof fetch;
+    status({ best: 1236, finalized: 1234, indexed: 1236, node: "up", specVersion: 1, genesis: null });
     open("/");
     const link = await waitFor(() => {
       const a = root.querySelector<HTMLAnchorElement>(".x-height a");
@@ -48,6 +55,19 @@ describe("Layout", () => {
     expect(link.getAttribute("href")).toBe("/block/1234");
     FakeEventSource.instances[0]!.emit("head", '{"best":1240,"finalized":1237,"indexed":1240}');
     await waitFor(() => expect(root.querySelector(".x-height a")?.textContent).toBe("1,237"));
+  });
+
+  it("shows no height while the node is down or nothing is finalized", async () => {
+    status({ best: 0, finalized: 0, indexed: 12, node: "down", specVersion: 1, genesis: null });
+    open("/");
+    await waitFor(() => expect(root.querySelector("h1")).not.toBeNull());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(root.querySelector(".x-height a")).toBeNull();
+    FakeEventSource.instances[0]!.emit("head", '{"best":0,"finalized":0,"indexed":12}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(root.querySelector(".x-height a")).toBeNull();
+    FakeEventSource.instances[0]!.emit("head", '{"best":14,"finalized":13,"indexed":14}');
+    await waitFor(() => expect(root.querySelector(".x-height a")?.textContent).toBe("13"));
   });
 
   it("shows no height while the API is away", async () => {

@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "kind": "extrinsic",
+      "block": 1237,
+      "item": {
+        "id": "1237-1",
+        "block": 1237,
+        "index": 1,
+        "hash": "0xa10004d5a10004d5a10004d5a10004d5a10004d5a10004d5a10004d5a10004d5",
+        "pallet": "sudo",
+        "method": "sudo",
+        "signer": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+        "nonce": 3,
+        "tip": "0",
+        "fee": "110000000",
+        "success": true,
+        "error": null,
+        "inner": [
+          {
+            "pallet": "identitee",
+            "method": "set_username_for"
+          }
+        ]
+      },
+      "timestamp": 1761407422000
+    }
+  ],
+  "next": null
+}

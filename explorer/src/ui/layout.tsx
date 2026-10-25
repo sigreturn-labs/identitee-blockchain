@@ -20,16 +20,17 @@ export const SECTIONS: Array<[label: string, path: string, detail?: string]> = [
 
 const isCurrent = (path: string, section: string, detail?: string): boolean => path === section || (detail !== undefined && path.startsWith(detail));
 
-/** The finalized height: read once, then followed on the live stream. Null until known. */
+/** The finalized height: read once, then followed on the live stream. Null until known, and while
+ * the node is away (the API then reports 0). */
 function useFinalized(): number | null {
   const [finalized, setFinalized] = useState<number | null>(null);
   useEffect(() => {
     let gone = false;
     get<Status>("/api/status").then(
-      (s) => !gone && setFinalized((f) => Math.max(f ?? 0, s.finalized)),
+      (s) => !gone && s.node === "up" && s.finalized > 0 && setFinalized((f) => Math.max(f ?? 0, s.finalized)),
       () => {},
     );
-    const stop = live((head) => setFinalized(head.finalized));
+    const stop = live((head) => setFinalized(head.finalized > 0 ? head.finalized : null));
     return () => {
       gone = true;
       stop();
@@ -48,7 +49,7 @@ export function Layout({ children }: { children: ComponentChildren }) {
     <div class="frame">
       <header class="x-top">
         <div class="x-brand">
-          <a class="mark" href="/">
+          <a class="mark" href="/" aria-label="identit.ee Explorer">
             identit<span>.ee</span>
             <span class="x-name">Explorer</span>
           </a>

@@ -1,0 +1,42 @@
+{
+  "id": "1239-1",
+  "block": 1239,
+  "index": 1,
+  "hash": "0xa10004d7a10004d7a10004d7a10004d7a10004d7a10004d7a10004d7a10004d7",
+  "pallet": "identitee",
+  "method": "claim_name",
+  "signer": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+  "nonce": 0,
+  "tip": "0",
+  "fee": "98000000",
+  "success": false,
+  "error": {
+    "pallet": "identitee",
+    "name": "NameTaken",
+    "docs": "The name is held by another account."
+  },
+  "timestamp": 1761407434000,
+  "args": {
+    "name": "alice"
+  },
+  "events": [
+    {
+      "id": "1239-1",
+      "block": 1239,
+      "index": 1,
+      "extrinsicIndex": 1,
+      "pallet": "system",
+      "method": "ExtrinsicFailed",
+      "data": {
+        "dispatch_error": {
+          "Module": {
+            "index": 8,
+            "error": "0x03000000"
+          }
+        }
+      },
+      "sentence": null,
+      "timestamp": 1761407434000
+    }
+  ]
+}
