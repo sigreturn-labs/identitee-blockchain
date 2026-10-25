@@ -17,7 +17,7 @@ import { profileUrl } from './config.ts';
 import { SS58_PREFIX, toJson } from './decode.ts';
 import type { Heads } from './indexer.ts';
 import * as state from './state.ts';
-import { BadCursorError, type EventRow, type ExtrinsicRow, type ExplorerStore, type HistoryItem } from './store.ts';
+import { BadCursorError, type BlockRow, type EventRow, type ExtrinsicRow, type ExplorerStore, type HistoryItem } from './store.ts';
 
 type Json = any;
 
@@ -71,6 +71,17 @@ export interface Live {
   nameOwner(name: string): Promise<string | null>;
   /** The current runtime and its pallets (from the metadata in memory), null if not known yet. */
   runtime(): RuntimeInfo | null;
+  /** The digest logs of the header of a block. */
+  blockLogs(blockHash: string): Promise<DigestLog[]>;
+  /** The GRANDPA authority keys (lowercase hex) in the state at a block. */
+  grandpaAuthorities(blockHash: string): Promise<string[]>;
+}
+
+/** One item of a block header's digest; `data` is hex, `engine` the 4-character consensus engine id. */
+export interface DigestLog {
+  type: string;
+  engine: string | null;
+  data: string;
 }
 
 export interface HeadSource {
@@ -92,7 +103,25 @@ export const OFFLINE: Live = {
   health: down,
   nameOwner: down,
   runtime: () => null,
+  blockLogs: down,
+  grandpaAuthorities: down,
 };
+
+const PRINTABLE_ENGINE = /^[\x20-\x7e]{4}$/;
+
+/** The digest items of a header: type, consensus engine (ASCII like `aura`, else hex) and bytes. */
+export function digestLogs(header: Json): DigestLog[] {
+  return header.digest.logs.map((log: Json): DigestLog => {
+    const type = log.type as string;
+    if (log.isConsensus || log.isSeal || log.isPreRuntime) {
+      const [id, data] = log.value as [Json, Json];
+      const raw = id.toU8a() as Uint8Array;
+      const text = Buffer.from(raw).toString('latin1');
+      return { type, engine: PRINTABLE_ENGINE.test(text) ? text : u8aToHex(raw), data: data.toHex() };
+    }
+    return { type, engine: null, data: log.value.toHex() };
+  });
+}
 
 const docsOf = (docs: Array<{ toString(): string }>): string => docs.map((d) => d.toString().trim()).join('\n').trim();
 
@@ -140,6 +169,8 @@ export function chainLive(api: ApiPromise, labels: Record<string, string>): Live
         const owner = toJson(await (api.query as Json).identitee.nameOwner(name));
         return typeof owner === 'string' ? owner : null;
       }),
+    blockLogs: (blockHash) => up(async () => digestLogs(await api.rpc.chain.getHeader(blockHash))),
+    grandpaAuthorities: (blockHash) => up(() => state.grandpaMembers(api, blockHash)),
     runtime: () => {
       const version = api.runtimeVersion.specVersion.toNumber();
       if (pallets === null || pallets.version !== version) pallets = { version, list: palletsOf(api.runtimeMetadata) };
@@ -196,6 +227,11 @@ class ApiError extends Error {
 
 const notFound = (): ApiError => new ApiError(404, 'not_found');
 
+/** An answer on a cacheable route that lacks parts the node could not give: sent, but not to be kept. */
+class Uncached {
+  constructor(readonly value: unknown) {}
+}
+
 type Params = string[];
 type Route = [RegExp, (params: Params, query: URLSearchParams) => unknown | Promise<unknown>, cacheable?: boolean];
 
@@ -221,8 +257,11 @@ export interface ExplorerApiOptions {
   live?: Live;
   heads?: HeadSource;
   origins: string[];
+  /** Names of validator keys (hex key to label), the keys in any case. */
   labels?: Record<string, string>;
   log: Logger;
+  /** How long a read from the node may take (default 5 s). */
+  liveTimeoutMs?: number;
   /** SSE comment ping (default 20 s). */
   pingMs?: number;
   /** How often the SSE stream checks whether the index moved (default 1 s). */
@@ -248,9 +287,13 @@ export class ExplorerApi {
   private readonly pollMs: number;
   private readonly maxClients: number;
   private readonly maxBuffer: number;
+  private readonly labels = new Map<string, string>();
+  private readonly liveTimeoutMs: number;
 
   constructor(options: ExplorerApiOptions) {
     this.store = options.store;
+    for (const [key, label] of Object.entries(options.labels ?? {})) this.labels.set(key.toLowerCase(), label);
+    this.liveTimeoutMs = options.liveTimeoutMs ?? LIVE_TIMEOUT_MS;
     this.live = options.live ?? OFFLINE;
     this.origins = new Set(options.origins);
     this.log = options.log;
@@ -367,6 +410,7 @@ export class ExplorerApi {
           throw new ApiError(400, 'bad_request');
         }
         const out = await handler(params, url.searchParams);
+        if (out instanceof Uncached) return json(200, out.value);
         return json(200, out, cacheable ? 'public, max-age=300' : 'no-store');
       }
       throw notFound();
@@ -392,7 +436,7 @@ export class ExplorerApi {
     if (!this.live.connected()) return down();
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('node timeout')), LIVE_TIMEOUT_MS);
+      timer = setTimeout(() => reject(new Error('node timeout')), this.liveTimeoutMs);
     });
     const value = read(this.live);
     value.catch(() => undefined);
@@ -413,9 +457,9 @@ export class ExplorerApi {
     return [
       [/^\/api\/status$/, () => this.status()],
       [/^\/api\/stats$/, async () => ({ ...s.counts(), authorities: (await this.orNull((l) => l.authorities()))?.length ?? null })],
-      [/^\/api\/blocks$/, (_p, q) => s.blocks(blockCursor(q), limitOf(q))],
+      [/^\/api\/blocks$/, (_p, q) => this.blocks(blockCursor(q), limitOf(q))],
       [/^\/api\/block\/([^/]+)$/, ([id]) => this.block(id!), true],
-      [/^\/api\/extrinsics$/, (_p, q) => this.page(s.extrinsics(cursorOf(q), limitOf(q), { signer: optAddress(q, 'signer'), pallet: optIdent(q, 'pallet') }), summarize)],
+      [/^\/api\/extrinsics$/, (_p, q) => this.page(s.extrinsics(cursorOf(q), limitOf(q), { signer: optAddress(q, 'signer'), pallet: optIdent(q, 'pallet'), signed: optFlag(q, 'signed') }), summarize)],
       [/^\/api\/extrinsic\/([^/]+)$/, ([id]) => this.extrinsic(id!), true],
       [/^\/api\/events$/, (_p, q) => this.page(s.events(cursorOf(q), limitOf(q), { pallet: optIdent(q, 'pallet'), method: optIdent(q, 'method') }))],
       [/^\/api\/account\/([^/]+)$/, ([a]) => this.account(a!)],
@@ -448,15 +492,37 @@ export class ExplorerApi {
     };
   }
 
-  private block(id: string): unknown {
+  /** The key is lowercase hex, as the indexer and the node give it. */
+  private label(key: string | null): string | null {
+    return key === null ? null : (this.labels.get(key) ?? null);
+  }
+
+  private named(keys: string[]): Array<{ key: string; label: string | null }> {
+    return keys.map((key) => ({ key, label: this.label(key) }));
+  }
+
+  private blocks(cursor: number | null, limit: number): { items: Array<BlockRow & { authorLabel: string | null }>; next: number | null } {
+    const p = this.store.blocks(cursor, limit);
+    return { items: p.items.map((b) => ({ ...b, authorLabel: this.label(b.author) })), next: p.next };
+  }
+
+  /** The block with the labels of its keys, and what only the node can read at it (digest logs, GRANDPA members) or null. */
+  private async block(id: string): Promise<unknown> {
     const key = blockId(id);
     const b = this.store.block(key);
     if (b === null) throw notFound();
-    return {
+    const [logs, members] = await Promise.all([this.orNull((l) => l.blockLogs(b.hash)), this.orNull((l) => l.grandpaAuthorities(b.hash))]);
+    const out = {
       ...b,
+      authorLabel: this.label(b.author),
+      signers: b.justificationSigners === null ? null : this.named(b.justificationSigners),
+      authoritySet: { id: b.authoritySetId, members: members === null ? null : this.named(members) },
+      logs,
       extrinsics: this.store.extrinsicsOfBlock(b.number).map((x) => ({ ...summarize(x), timestamp: b.timestamp })),
       events: this.store.eventsOfBlock(b.number).map((e) => ({ ...e, timestamp: b.timestamp })),
     };
+    // a finalized block never changes, but an answer missing its live parts must not be cached as if it were whole
+    return logs === null || members === null ? new Uncached(out) : out;
   }
 
   private extrinsic(id: string): unknown {
@@ -579,8 +645,8 @@ function limitOf(q: URLSearchParams): number {
   const text = q.get('limit');
   if (text === null) return DEFAULT_LIMIT;
   if (!/^\d+$/.test(text) || /^0+$/.test(text)) throw new ApiError(400, 'bad_limit');
-  // any larger number of digits is just "as many as allowed"
-  return text.length > 3 ? MAX_LIMIT : Math.min(Number(text), MAX_LIMIT);
+  // a number too long for a double reads as Infinity, which the cap turns into "as many as allowed"
+  return Math.min(Number(text), MAX_LIMIT);
 }
 
 function cursorOf(q: URLSearchParams): string | null {
@@ -613,6 +679,14 @@ function address(input: string): string {
 function optAddress(q: URLSearchParams, key: string): string | undefined {
   const v = q.get(key);
   return v === null || v === '' ? undefined : address(v);
+}
+
+/** `key=1` is on; absent, empty or `0` is off; anything else is a 400 `bad_<key>`. */
+function optFlag(q: URLSearchParams, key: string): boolean {
+  const v = q.get(key);
+  if (v === null || v === '' || v === '0') return false;
+  if (v === '1') return true;
+  throw new ApiError(400, `bad_${key}`);
 }
 
 function optIdent(q: URLSearchParams, key: string): string | undefined {

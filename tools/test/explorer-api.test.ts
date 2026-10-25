@@ -11,7 +11,7 @@ import { Metadata, TypeRegistry } from '@polkadot/types';
 import { u8aToHex } from '@polkadot/util';
 import { cryptoWaitReady, encodeAddress } from '@polkadot/util-crypto';
 
-import { callSummary, ExplorerApi, palletsOf, type HeadSource, type Live } from '../src/explorer/api.ts';
+import { callSummary, digestLogs, ExplorerApi, palletsOf, type HeadSource, type Live } from '../src/explorer/api.ts';
 import { DEFAULT_ORIGIN, DEV_ORIGIN, parseConfig, parseLabels, profileUrl, RESERVED_PATHS } from '../src/explorer/config.ts';
 import type { Heads } from '../src/explorer/indexer.ts';
 import { keepIndexing, main } from '../src/explorer/main.ts';
@@ -26,6 +26,9 @@ const bob = keyring.addFromUri('//Bob');
 const ALICE = encodeAddress(alice.publicKey, 2426);
 const BOB = encodeAddress(bob.publicKey, 2426);
 const ALICE_HEX = u8aToHex(alice.publicKey);
+const BOB_HEX = u8aToHex(bob.publicKey);
+const CAROL_HEX = `0x${'ca'.repeat(32)}`;
+const LABELS = { [ALICE_HEX]: 'identitee-01', [CAROL_HEX]: 'identitee-02' };
 const ALICE_GENERIC = encodeAddress(alice.publicKey, 42);
 
 const GENESIS = `0x${'ab'.repeat(32)}`;
@@ -85,8 +88,8 @@ function fill(store: ExplorerStore): void {
     }
     const block: BlockRow = {
       number: n, hash: hash(0x10, n), parentHash: hash(0x10, n - 1), stateRoot: hash(0x20, n), extrinsicsRoot: hash(0x30, n),
-      timestamp: n === 0 ? null : T0 + n * 6000, specVersion: n >= 20 ? 2 : 1, author: ALICE, authoritySetId: 0,
-      justificationSigners: null, extrinsicCount: xts.length, eventCount: evs.length,
+      timestamp: n === 0 ? null : T0 + n * 6000, specVersion: n >= 20 ? 2 : 1, author: n % 2 === 0 ? ALICE_HEX : BOB_HEX, authoritySetId: n < 100 ? 0 : 1,
+      justificationSigners: n === 10 ? [ALICE_HEX, BOB_HEX] : null, extrinsicCount: xts.length, eventCount: evs.length,
     };
     store.writeBlock(block, xts, evs, links, extras);
   }
@@ -97,9 +100,18 @@ const AUTHORITIES: AuthorityState[] = [
   { id: 1, name: 'example.com', active: true, agents: [] },
 ];
 
-function fakeLive(): Live & { up: boolean } {
+const LOGS = [
+  { type: 'PreRuntime', engine: 'aura', data: '0x0a0b0c0d00000000' },
+  { type: 'Seal', engine: 'aura', data: `0x${'11'.repeat(64)}` },
+];
+
+function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boolean; hang: boolean; reads: string[] } {
   const f = {
     up: true,
+    failLogs: false,
+    failMembers: false,
+    hang: false,
+    reads: [] as string[],
     connected: () => f.up,
     specVersion: () => 2,
     guard<T>(v: T): Promise<T> {
@@ -112,6 +124,15 @@ function fakeLive(): Live & { up: boolean } {
     validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01' }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01' }], setId: 0 }),
     health: () => f.guard({ peers: 2, isSyncing: false, shouldHavePeers: true }),
     nameOwner: (name: string) => f.guard(name === 'alice' ? ALICE : name === '010' ? BOB : null),
+    blockLogs(blockHash: string) {
+      f.reads.push(`logs ${blockHash}`);
+      if (f.hang) return new Promise<never>(() => undefined);
+      return f.failLogs ? Promise.reject(new Error('header not found')) : f.guard(LOGS);
+    },
+    grandpaAuthorities(blockHash: string) {
+      f.reads.push(`grandpa ${blockHash}`);
+      return f.failMembers ? Promise.reject(new Error('state discarded')) : f.guard([ALICE_HEX, BOB_HEX]);
+    },
     runtime: () => ({ specName: 'identitee', specVersion: 2, pallets: [{ name: 'System', index: 0, calls: [{ name: 'remark', docs: 'Make some on-chain remark.' }], events: [], errors: [], storage: [], constants: [] }] }),
   };
   return f;
@@ -134,7 +155,7 @@ const store = new ExplorerStore(':memory:');
 fill(store);
 const live = fakeLive();
 const heads = fakeHeads();
-const server = new ExplorerApi({ store, live, heads, origins: [DEFAULT_ORIGIN, DEV_ORIGIN], labels: {}, log: quiet, pingMs: 50, pollMs: 20 });
+const server = new ExplorerApi({ store, live, heads, origins: [DEFAULT_ORIGIN, DEV_ORIGIN], labels: LABELS, log: quiet, pingMs: 50, pollMs: 20, liveTimeoutMs: 200 });
 let base = '';
 
 before(async () => {
@@ -188,6 +209,13 @@ describe('blocks', () => {
     assert.equal((await ok('/api/blocks?limit=1000000')).items.length, 100);
     assert.equal((await ok(`/api/blocks?limit=${'9'.repeat(400)}`)).items.length, 100);
     assert.equal((await ok('/api/blocks?limit=007')).items.length, 7);
+    // leading zeros are zeros, however many digits there are
+    assert.equal((await ok('/api/blocks?limit=0005')).items.length, 5);
+    assert.equal((await ok('/api/blocks?limit=00000010')).items.length, 10);
+    assert.equal((await ok(`/api/blocks?limit=${'0'.repeat(400)}5`)).items.length, 5);
+    assert.equal((await ok('/api/extrinsics?limit=0003')).items.length, 3);
+    assert.equal((await ok('/api/blocks?limit=0100')).items.length, 100);
+    assert.equal((await ok('/api/blocks?limit=0101')).items.length, 100);
   });
 
   it('refuses a bad limit or cursor with 400', async () => {
@@ -210,6 +238,110 @@ describe('blocks', () => {
     assert.equal(sudo.timestamp, T0 + 5 * 6000);
     assert.equal(b.events[0].timestamp, T0 + 5 * 6000);
     assert.equal((await ok(`/api/block/${hash(0x10, 5).toUpperCase().replace('0X', '0x')}`)).number, 5);
+  });
+
+  it('names the author of each listed block from the labels, null when it has none', async () => {
+    const items = (await ok('/api/blocks?limit=4')).items;
+    assert.deepEqual(items.map((b: any) => [b.number, b.author, b.authorLabel]), [
+      [120, ALICE_HEX, 'identitee-01'],
+      [119, BOB_HEX, null],
+      [118, ALICE_HEX, 'identitee-01'],
+      [117, BOB_HEX, null],
+    ]);
+    assert.equal(items[0].authoritySetId, 1);
+    assert.ok(items[0].justificationSigners === null);
+  });
+
+  it('gives the block detail its labels, its signers, its authority set and its digest logs', async () => {
+    live.reads.length = 0;
+    const b = await ok('/api/block/10');
+    assert.equal(b.author, ALICE_HEX);
+    assert.equal(b.authorLabel, 'identitee-01');
+    assert.deepEqual(b.justificationSigners, [ALICE_HEX, BOB_HEX]);
+    assert.deepEqual(b.signers, [{ key: ALICE_HEX, label: 'identitee-01' }, { key: BOB_HEX, label: null }]);
+    assert.equal(b.authoritySetId, 0);
+    assert.deepEqual(b.authoritySet, { id: 0, members: [{ key: ALICE_HEX, label: 'identitee-01' }, { key: BOB_HEX, label: null }] });
+    assert.deepEqual(b.logs, LOGS);
+    // read at that block, by its hash
+    assert.deepEqual([...live.reads].sort(), [`grandpa ${hash(0x10, 10)}`, `logs ${hash(0x10, 10)}`]);
+    // the old fields are all still there
+    for (const k of ['number', 'hash', 'parentHash', 'stateRoot', 'extrinsicsRoot', 'timestamp', 'specVersion', 'extrinsicCount', 'eventCount', 'extrinsics', 'events']) assert.ok(k in b, k);
+  });
+
+  it('has no signers without a justification, and the id of the set in force', async () => {
+    const b = await ok('/api/block/105');
+    assert.equal(b.signers, null);
+    assert.equal(b.justificationSigners, null);
+    assert.equal(b.authoritySet.id, 1);
+    assert.equal(b.authorLabel, null);
+  });
+
+  it('matches labels whatever the case of the configured key', async () => {
+    const mixed = new ExplorerApi({ store, live, origins: [], labels: { [ALICE_HEX.toUpperCase().replace('0X', '0x')]: 'upper' }, log: quiet });
+    const port = await mixed.listen(0, '127.0.0.1');
+    try {
+      const b = (await (await fetch(`http://127.0.0.1:${port}/api/block/10`)).json()) as any;
+      assert.equal(b.authorLabel, 'upper');
+      assert.equal(b.signers[0].label, 'upper');
+      assert.equal(b.authoritySet.members[0].label, 'upper');
+    } finally {
+      await mixed.close();
+    }
+  });
+
+  it('keeps the labels, and nulls what only the node knows, when the node is down', async () => {
+    live.up = false;
+    try {
+      const r = await get('/api/block/10');
+      assert.equal(r.status, 200);
+      assert.equal(r.body.authorLabel, 'identitee-01');
+      assert.deepEqual(r.body.signers, [{ key: ALICE_HEX, label: 'identitee-01' }, { key: BOB_HEX, label: null }]);
+      assert.deepEqual(r.body.authoritySet, { id: 0, members: null });
+      assert.equal(r.body.logs, null);
+      assert.equal(r.body.extrinsics.length, 2);
+      // an answer without its live parts is not kept by a cache
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+      assert.equal((await ok('/api/blocks?limit=2')).items[0].authorLabel, 'identitee-01');
+    } finally {
+      live.up = true;
+    }
+  });
+
+  it('drops only the part the node cannot give, and does not let a cache keep the gap', async () => {
+    live.failLogs = true;
+    try {
+      const r = await get('/api/block/10');
+      assert.equal(r.status, 200);
+      assert.equal(r.body.logs, null);
+      assert.equal(r.body.authoritySet.members.length, 2);
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+    } finally {
+      live.failLogs = false;
+    }
+    live.failMembers = true;
+    try {
+      const r = await get('/api/block/10');
+      assert.deepEqual(r.body.authoritySet, { id: 0, members: null });
+      assert.deepEqual(r.body.logs, LOGS);
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+    } finally {
+      live.failMembers = false;
+    }
+    assert.match((await get('/api/block/10')).headers.get('cache-control') ?? '', /max-age=300/);
+  });
+
+  it('gives up on a node that does not answer within the live timeout', async () => {
+    live.hang = true;
+    try {
+      const started = Date.now();
+      const r = await get('/api/block/10');
+      assert.equal(r.status, 200);
+      assert.equal(r.body.logs, null);
+      assert.equal(r.body.authorLabel, 'identitee-01');
+      assert.ok(Date.now() - started < 2000);
+    } finally {
+      live.hang = false;
+    }
   });
 
   it('answers 404 not_found for an unknown block and 400 for a malformed id', async () => {
@@ -239,6 +371,31 @@ describe('extrinsics and events', () => {
     assert.ok(p.items.every((x: ExtrinsicRow) => x.signer === ALICE));
     assert.equal((await ok('/api/extrinsics?pallet=sudo')).items.length, 1);
     assert.equal((await get('/api/extrinsics?signer=nobody')).status, 400);
+  });
+
+  it('lists only the signed extrinsics with signed=1, paginated like the others', async () => {
+    const p = await ok('/api/extrinsics?signed=1&limit=3');
+    assert.deepEqual(p.items.map((x: ExtrinsicRow) => x.id), ['120-1', '119-1', '118-1']);
+    assert.equal(p.next, '118-1');
+    assert.ok(p.items.every((x: any) => x.signer !== null && x.args === undefined && Array.isArray(x.inner) && x.timestamp === T0 + x.block * 6000));
+    const next = await ok(`/api/extrinsics?signed=1&limit=3&cursor=${p.next}`);
+    assert.deepEqual(next.items.map((x: ExtrinsicRow) => x.id), ['117-1', '116-1', '115-1']);
+    const all = await ok('/api/extrinsics?signed=1&limit=100&cursor=101-0');
+    assert.equal(all.items.length, 100);
+    assert.equal(all.next, null);
+    assert.ok(all.items.every((x: ExtrinsicRow) => x.signer !== null));
+    assert.equal((await ok('/api/extrinsics?signed=1&limit=100&cursor=1-1')).items.length, 0);
+    // the same list unfiltered holds the unsigned inherents too
+    assert.equal((await ok('/api/extrinsics?limit=3')).items.filter((x: ExtrinsicRow) => x.signer === null).length, 1);
+  });
+
+  it('combines signed with the other filters and treats 0 or nothing as no filter', async () => {
+    assert.deepEqual((await ok('/api/extrinsics?signed=1&pallet=sudo')).items.map((x: ExtrinsicRow) => x.id), ['5-1']);
+    assert.deepEqual((await ok('/api/extrinsics?signed=1&pallet=timestamp')).items, []);
+    assert.equal((await ok(`/api/extrinsics?signed=1&signer=${BOB}`)).items.length, 0);
+    assert.equal((await ok(`/api/extrinsics?signed=1&signer=${ALICE}&limit=2`)).items.length, 2);
+    for (const q of ['signed=0', 'signed=']) assert.deepEqual((await ok(`/api/extrinsics?${q}&limit=3`)).items.map((x: ExtrinsicRow) => x.id), ['120-1', '120-0', '119-1'], q);
+    for (const q of ['signed=yes', 'signed=true', 'signed=2']) assert.deepEqual((await get(`/api/extrinsics?${q}`)).body, { error: 'bad_signed' }, q);
   });
 
   it('shows an extrinsic by id with its full args and its events', async () => {
@@ -543,6 +700,41 @@ describe('connected guard', () => {
     } finally {
       await guarded.close();
     }
+  });
+});
+
+describe('digest logs', () => {
+  it('reads the type, the engine and the bytes of each digest item of a header', () => {
+    const registry = new TypeRegistry();
+    const header = registry.createType('Header', {
+      parentHash: hash(1, 1),
+      number: 7,
+      stateRoot: hash(2, 1),
+      extrinsicsRoot: hash(3, 1),
+      digest: {
+        logs: [
+          { PreRuntime: ['0x61757261', '0x0a0b0c0d00000000'] },
+          { Consensus: ['0x46524e4b', '0x01'] },
+          { Seal: ['0x61757261', `0x${'11'.repeat(64)}`] },
+          { Other: '0xdeadbeef' },
+          { RuntimeEnvironmentUpdated: null },
+          { PreRuntime: ['0xff00ff7f', '0x'] },
+        ],
+      },
+    });
+    assert.deepEqual(digestLogs(header), [
+      { type: 'PreRuntime', engine: 'aura', data: '0x0a0b0c0d00000000' },
+      { type: 'Consensus', engine: 'FRNK', data: '0x01' },
+      { type: 'Seal', engine: 'aura', data: `0x${'11'.repeat(64)}` },
+      { type: 'Other', engine: null, data: '0xdeadbeef' },
+      { type: 'RuntimeEnvironmentUpdated', engine: null, data: '0x' },
+      { type: 'PreRuntime', engine: '0xff00ff7f', data: '0x' },
+    ]);
+  });
+
+  it('gives an empty list for a header without logs', () => {
+    const header = new TypeRegistry().createType('Header', { number: 1 });
+    assert.deepEqual(digestLogs(header), []);
   });
 });
 

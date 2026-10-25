@@ -155,6 +155,7 @@ function drain<T>(read: (cursor: string | null) => Page<T>, limit: number): T[] 
 }
 
 const ids = (rows: Array<{ id: string }>): string[] => rows.map((r) => r.id);
+const fillRows = (target: ExplorerStore, n: number): void => void fill(target, n);
 
 let store: ExplorerStore;
 beforeEach(() => {
@@ -369,6 +370,19 @@ describe('pagination', () => {
     assert.deepEqual(ids(drain((cur) => store.events(cur, 2, { pallet: 'identitee', method: 'AttestationRequested' }), 2)), ['5-2', '3-2', '1-2']);
     assert.deepEqual(ids(store.events(null, 20, { pallet: 'identitee' }).items), ['6-3', '5-2', '4-3', '3-3', '3-2', '1-2']);
     assert.deepEqual(ids(store.events(null, 20, { pallet: 'balances', method: 'Nope' }).items), []);
+  });
+
+  it('lists only the signed extrinsics, alone or with another filter, and pages the list', () => {
+    fill(store, 6);
+    const signed = drain((cur) => store.extrinsics(cur, 3, { signed: true }), 3);
+    assert.deepEqual(ids(signed), ['6-2', '6-1', '5-2', '5-1', '4-2', '4-1', '3-2', '3-1', '2-2', '2-1', '1-2', '1-1']);
+    assert.ok(signed.every((x) => x.signer !== null));
+    assert.deepEqual(ids(store.extrinsics(null, 10, { signed: true, pallet: 'balances' }).items), ['6-1', '5-1', '4-1', '3-1', '2-1', '1-1']);
+    assert.deepEqual(ids(store.extrinsics(null, 10, { signed: true, signer: BOB }).items), ['6-2', '5-2', '4-2', '3-2', '2-2', '1-2']);
+    assert.deepEqual(ids(store.extrinsics(null, 2, { signed: true }).items), ['6-2', '6-1']);
+    // false is no filter at all
+    assert.equal(store.extrinsics(null, 100, { signed: false }).items.length, 18);
+    assert.deepEqual(store.extrinsics(null, 10, { signed: true, pallet: 'timestamp' }), { items: [], next: null });
   });
 
   it('filters the transfers by address, from or to, a self transfer once', () => {
@@ -610,11 +624,45 @@ describe('schema versions', () => {
     const a = new ExplorerStore(path);
     write(a, fixture(1));
     a.close();
-    assert.equal(version(path), 1);
+    assert.equal(version(path), 2);
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 1);
     b.close();
-    assert.equal(version(path), 1);
+    assert.equal(version(path), 2);
+  });
+
+  it('adds the signed-extrinsics index to a database of version 1, rows kept', () => {
+    const path = join(dir, 'explorer.db');
+    const a = new ExplorerStore(path);
+    fillRows(a, 3);
+    a.close();
+    const raw = new DatabaseSync(path);
+    raw.exec('DROP INDEX extrinsics_signed; PRAGMA user_version = 1');
+    raw.close();
+    const b = new ExplorerStore(path);
+    assert.equal(b.lastIndexed(), 3);
+    assert.deepEqual(ids(b.extrinsics(null, 10, { signed: true }).items), ['3-2', '3-1', '2-2', '2-1', '1-2', '1-1']);
+    b.close();
+    assert.equal(version(path), 2);
+    const check = new DatabaseSync(path);
+    assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'extrinsics_signed'").get());
+    check.close();
+  });
+
+  it('reads the signed list from its partial index, not by scanning every extrinsic', () => {
+    const path = join(dir, 'explorer.db');
+    const a = new ExplorerStore(path);
+    fillRows(a, 3);
+    a.close();
+    const raw = new DatabaseSync(path);
+    const plan = (sql: string): string =>
+      (raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join('\n');
+    assert.match(plan('SELECT * FROM extrinsics WHERE 1 AND signer IS NOT NULL ORDER BY block DESC, idx DESC LIMIT 26'), /extrinsics_signed/);
+    assert.match(
+      plan('SELECT * FROM extrinsics WHERE (block, idx) < (2, 1) AND signer IS NOT NULL ORDER BY block DESC, idx DESC LIMIT 26'),
+      /extrinsics_signed/,
+    );
+    raw.close();
   });
 
   it('refuses a database written by a newer version', () => {

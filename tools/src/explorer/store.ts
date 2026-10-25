@@ -274,6 +274,10 @@ const STEPS: string[] = [
     PRIMARY KEY (block, idx)
   ) WITHOUT ROWID;
   `,
+  `
+  -- the list of signed extrinsics only: without it, every unsigned inherent is scanned one by one
+  CREATE INDEX extrinsics_signed ON extrinsics (block, idx) WHERE signer IS NOT NULL;
+  `,
 ];
 
 /** Bring `db` to the last of `steps`, each step in its own transaction; refuse a newer database. */
@@ -638,12 +642,13 @@ export class ExplorerStore {
     return rows.map(toExtrinsic);
   }
 
-  /** Extrinsics newest first. `cursor` is the id of the last extrinsic of the previous page. */
-  extrinsics(cursor: string | null, limit: number, filter: { signer?: string; pallet?: string } = {}): Page<ExtrinsicRow> {
+  /** Extrinsics newest first. `cursor` is the id of the last extrinsic of the previous page. `signed` keeps those with a signer. */
+  extrinsics(cursor: string | null, limit: number, filter: { signer?: string; pallet?: string; signed?: boolean } = {}): Page<ExtrinsicRow> {
     checkLimit(limit);
     const older = olderThan(cursor, '');
     const where = [older.sql];
     const params: SQLInputValue[] = [...older.params];
+    if (filter.signed === true) where.push('signer IS NOT NULL');
     if (filter.signer !== undefined) {
       where.push('signer = ?');
       params.push(filter.signer);

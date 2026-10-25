@@ -183,6 +183,15 @@ function findLabel(labels: Record<string, string>, key: string): string | null {
   return null;
 }
 
+/** The GRANDPA authority keys (lowercase hex) in the state at `blockHash`; needs a node that keeps that state. */
+export function grandpaMembers(api: ApiPromise, blockHash: string): Promise<string[]> {
+  return cached(api, `grandpa:${blockHash}`, async () => {
+    const at = await api.at(blockHash);
+    const list = (await at.query.grandpa.authorities()) as unknown as Array<[Codec, Codec]>;
+    return list.map(([k]) => k.toHex().toLowerCase());
+  });
+}
+
 export function health(api: ApiPromise): Promise<Health> {
   return cached(api, 'health', async () => {
     const h = await api.rpc.system.health();
