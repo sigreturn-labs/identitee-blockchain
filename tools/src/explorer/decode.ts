@@ -38,8 +38,9 @@ export function auraSlot(digestLogs: DigestItem[]): bigint | null {
   return null;
 }
 
-/** The Aura author of a slot: the authorities take turns. */
+/** The Aura author of a slot: the authorities take turns. Throws if there are none. */
 export function auraAuthor(slot: bigint, authorities: string[]): string {
+  if (authorities.length === 0) throw new Error('auraAuthor: no Aura authorities');
   return authorities[Number(slot % BigInt(authorities.length))];
 }
 
@@ -63,41 +64,52 @@ function bytesToJson(u8a: Uint8Array): string {
 /**
  * A codec as human JSON: addresses in SS58 2426, integers wider than 32 bits (balances) as
  * decimal strings, bytes as text when valid UTF-8 and hex otherwise, unit enum variants as their
- * name, other variants as `{ Variant: value }`, nested calls as `{ pallet, method, args }`.
+ * name, other variants as `{ Variant: value }`. A call given directly comes out as `walkCall`
+ * renders it; a call nested in the value as `{ pallet, method }` only.
  */
 export function toJson(codec: Codec): unknown {
+  if (codec instanceof GenericCall) return walkCall(codec as unknown as Call);
+  return json(codec, []);
+}
+
+// Each nested call is walked once, pushed to `calls` and left as `{ pallet, method }` in the
+// arguments: rendering it in full there too would double the work and the output at each level.
+function json(codec: Codec, calls: WalkedCall[]): unknown {
+  const rec = (c: Codec): unknown => json(c, calls);
   if (codec instanceof GenericAccountId) return encodeAddress(codec.toU8a(), SS58_PREFIX);
   if (codec instanceof GenericCall) {
-    const { pallet, method, args } = walkCall(codec as unknown as Call);
-    return { pallet, method, args };
+    const walked = walkCall(codec as unknown as Call);
+    calls.push(walked);
+    return { pallet: walked.pallet, method: walked.method };
   }
-  if (codec instanceof Compact) return toJson(codec.unwrap());
+  if (codec instanceof Compact) return rec(codec.unwrap());
   if (codec instanceof UInt || codec instanceof Int) return codec.bitLength() > 32 ? codec.toString() : codec.toNumber();
   if (codec instanceof Bool) return codec.isTrue;
   if (codec instanceof Null) return null;
   if (codec instanceof Text) return codec.toString();
   if (codec instanceof Bytes) return bytesToJson(codec.toU8a(true));
   if (codec instanceof Raw) return codec.toHex();
-  if (codec instanceof Option) return codec.isSome ? toJson(codec.unwrap()) : null;
-  if (codec instanceof Result) return { [codec.type]: toJson(codec.inner) };
+  if (codec instanceof Option) return codec.isSome ? rec(codec.unwrap()) : null;
+  if (codec instanceof Result) return { [codec.type]: rec(codec.inner) };
   if (codec instanceof Enum) {
     // A MultiAddress that holds an account id reads as the address itself.
-    if (codec.type === 'Id' && codec.inner instanceof GenericAccountId) return toJson(codec.inner);
-    return codec.inner instanceof Null ? codec.type : { [codec.type]: toJson(codec.inner) };
+    if (codec.type === 'Id' && codec.inner instanceof GenericAccountId) return rec(codec.inner);
+    return codec.inner instanceof Null ? codec.type : { [codec.type]: rec(codec.inner) };
   }
   if (codec instanceof Struct) {
     const out: Record<string, unknown> = {};
-    for (const [key, value] of codec.entries()) out[String(key)] = toJson(value);
+    for (const [key, value] of codec.entries()) out[String(key)] = rec(value);
     return out;
   }
-  if (codec instanceof Map) return [...codec.entries()].map(([k, v]) => [toJson(k as Codec), toJson(v as Codec)]);
-  if (Array.isArray(codec) || codec instanceof Set) return [...(codec as Iterable<Codec>)].map(toJson);
+  if (codec instanceof Map) return [...codec.entries()].map(([k, v]) => [rec(k as Codec), rec(v as Codec)]);
+  if (Array.isArray(codec) || codec instanceof Set) return [...(codec as Iterable<Codec>)].map(rec);
   return codec.toJSON();
 }
 
 export interface WalkedCall {
   pallet: string;
   method: string;
+  /** Nested calls appear here as `{ pallet, method }`, in full in `inner`. */
   args: Record<string, unknown>;
   inner: WalkedCall[];
 }
@@ -108,19 +120,9 @@ export function walkCall(call: Call): WalkedCall {
   const inner: WalkedCall[] = [];
   // `argsDef` keeps the metadata's names (snake case), `meta.args` has them in camel case.
   Object.keys(call.argsDef).forEach((name, i) => {
-    const value = call.args[i];
-    args[name] = toJson(value);
-    collectCalls(value, inner);
+    args[name] = json(call.args[i], inner);
   });
   return { pallet: call.section, method: call.meta.name.toString(), args, inner };
-}
-
-function collectCalls(value: Codec, out: WalkedCall[]): void {
-  if (value instanceof GenericCall) {
-    out.push(walkCall(value as unknown as Call));
-    return;
-  }
-  for (const child of children(value)) collectCalls(child, out);
 }
 
 /** The data of an event by field name (the metadata's names), each as JSON. */
@@ -128,7 +130,7 @@ export function eventData(event: Event): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   event.data.forEach((value, i) => {
     const name = event.meta.fields[i]?.name.unwrapOr(null)?.toString() ?? String(i);
-    out[name] = toJson(value);
+    out[name] = json(value, []);
   });
   return out;
 }

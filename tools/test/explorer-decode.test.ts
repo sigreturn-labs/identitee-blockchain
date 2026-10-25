@@ -85,6 +85,10 @@ describe('aura', () => {
     assert.equal(auraAuthor(7n, ['a', 'b', 'c']), 'b');
     assert.equal(auraAuthor(9n, ['a', 'b', 'c']), 'a');
   });
+
+  it('refuses an empty authority set', () => {
+    assert.throws(() => auraAuthor(7n, []), /no Aura authorities/);
+  });
 });
 
 describe('justificationSigners', () => {
@@ -125,6 +129,23 @@ describe('walkCall', () => {
     assert.equal(walked.inner[0].method, 'set_username_for');
     assert.deepEqual(walked.inner[0].args, { who: BOB, name: 'bob' });
     assert.deepEqual(walked.inner[0].inner, []);
+    assert.deepEqual(walked.args, { call: { pallet: 'identitee', method: 'set_username_for' } });
+  });
+
+  it('walks deeply nested sudo calls in linear time and size', () => {
+    let nested = call('Identitee', 'claim_username', { name: 'alice' });
+    for (let i = 0; i < 25; i++) nested = call('Sudo', 'sudo', { call: nested });
+    const started = performance.now();
+    let walked = walkCall(nested);
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 200, `walkCall took ${elapsed.toFixed(0)} ms`);
+    assert.ok(JSON.stringify(walked).length < 5_000);
+    for (let i = 0; i < 25; i++) {
+      assert.equal(walked.method, 'sudo');
+      assert.equal(walked.inner.length, 1);
+      walked = walked.inner[0];
+    }
+    assert.deepEqual(walked, { pallet: 'identitee', method: 'claim_username', args: { name: 'alice' }, inner: [] });
   });
 
   it('keeps snake case argument names and decodes enums', () => {
@@ -154,6 +175,24 @@ describe('accountsIn', () => {
     const inner = call('Balances', 'transfer_keep_alive', { dest: { Id: bob.publicKey }, value: 1 });
     const outer = call('Sudo', 'sudo_as', { who: { Id: alice.publicKey }, call: inner });
     assert.deepEqual(accountsIn(outer).sort(), [ALICE, BOB].sort());
+  });
+
+  it('finds an address nested in a struct', () => {
+    const value = registry.createType('{"owner":"AccountId","n":"u32","label":"Bytes"}', { owner: bob.publicKey, n: 1, label: 'bob' });
+    assert.deepEqual(accountsIn(value), [BOB]);
+  });
+
+  it('finds the signer and the destination of a signed extrinsic', () => {
+    const transfer = call('Balances', 'transfer_keep_alive', { dest: { Id: bob.publicKey }, value: 1 });
+    const xt = registry.createType('Extrinsic', transfer);
+    xt.signFake(alice.address, {
+      blockHash: `0x${'33'.repeat(32)}`,
+      genesisHash: `0x${'33'.repeat(32)}`,
+      nonce: 0,
+      runtimeVersion: { specVersion: 8, transactionVersion: 1 } as never,
+    });
+    assert.ok(xt.isSigned);
+    assert.deepEqual(accountsIn(xt).sort(), [ALICE, BOB].sort());
   });
 
   it('finds every address of an event once', () => {
