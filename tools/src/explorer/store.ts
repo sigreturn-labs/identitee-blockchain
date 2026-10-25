@@ -797,6 +797,25 @@ export class ExplorerStore {
       .all(...params, limit + 1);
   }
 
+  /** The timestamp of each block of `numbers` (null if not indexed or without one). */
+  blockTimes(numbers: number[]): Map<number, number | null> {
+    const wanted = [...new Set(numbers)];
+    const out = new Map<number, number | null>(wanted.map((n) => [n, null]));
+    for (let i = 0; i < wanted.length; i += 500) {
+      const chunk = wanted.slice(i, i + 500);
+      const rows = this.db.prepare(`SELECT number, timestamp FROM blocks WHERE number IN (${chunk.map(() => '?').join(',')})`).all(...chunk) as unknown as Array<{
+        number: number; timestamp: number | null;
+      }>;
+      for (const r of rows) out.set(r.number, r.timestamp);
+    }
+    return out;
+  }
+
+  /** The genesis hash the store is tied to, null before `openForGenesis`. */
+  genesis(): string | null {
+    return this.getMeta('genesis');
+  }
+
   /** The runtime versions seen so far, oldest first. */
   runtimes(): RuntimeRow[] {
     const rows = this.db.prepare('SELECT spec_version, from_block, spec_name FROM runtime_versions ORDER BY from_block').all() as unknown as Array<{

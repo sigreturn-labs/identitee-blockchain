@@ -451,6 +451,23 @@ describe('account history', () => {
   });
 });
 
+describe('block times and genesis', () => {
+  it('gives the timestamp of each indexed block asked for, null for the others', () => {
+    fill(store, 3);
+    const times = store.blockTimes([3, 1, 3, 9]);
+    assert.deepEqual([...times.entries()].sort((a, b) => a[0] - b[0]), [[1, 1_700_000_006_000], [3, 1_700_000_018_000], [9, null]]);
+    assert.equal(store.blockTimes([]).size, 0);
+    const many = Array.from({ length: 1200 }, (_, i) => i);
+    assert.equal(store.blockTimes(many).get(2), 1_700_000_012_000, 'more numbers than one statement takes');
+  });
+
+  it('gives the stored genesis hash', () => {
+    assert.equal(store.genesis(), null);
+    store.openForGenesis(GENESIS.toUpperCase().replace('0X', '0x'));
+    assert.equal(store.genesis(), GENESIS);
+  });
+});
+
 describe('runtime versions', () => {
   it('keeps every version, in block order', () => {
     store.recordRuntime(2, 400, 'identitee');
