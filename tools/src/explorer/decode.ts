@@ -53,19 +53,26 @@ export function justificationSigners(justification: Uint8Array, registry: Regist
 
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 
+// Text that would be unsafe to show as is: C0 controls and DEL, and the bidi embeddings, overrides
+// and isolates that make a string display in another order than it reads.
+const UNSAFE_TEXT = /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/;
+
 function bytesToJson(u8a: Uint8Array): string {
+  let text: string;
   try {
-    return UTF8.decode(u8a);
+    text = UTF8.decode(u8a);
   } catch {
     return u8aToHex(u8a);
   }
+  return UNSAFE_TEXT.test(text) ? u8aToHex(u8a) : text;
 }
 
 /**
  * A codec as human JSON: addresses in SS58 2426, integers wider than 32 bits (balances) as
- * decimal strings, bytes as text when valid UTF-8 and hex otherwise, unit enum variants as their
- * name, other variants as `{ Variant: value }`. A call given directly comes out as `walkCall`
- * renders it; a call nested in the value as `{ pallet, method }` only.
+ * decimal strings, bytes as text when valid UTF-8 without control or bidi characters and hex
+ * otherwise, unit enum variants as their name, other variants as `{ Variant: value }`. A call
+ * given directly comes out as `walkCall` renders it; a call nested in the value as
+ * `{ pallet, method }` only.
  */
 export function toJson(codec: Codec): unknown {
   if (codec instanceof GenericCall) return walkCall(codec as unknown as Call);

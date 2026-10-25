@@ -20,6 +20,7 @@ function useIndexVersion(indexed: number | null | undefined): number {
 
 const COUNTERS: Array<[label: string, key: keyof Stats]> = [
   ["Accounts", "accounts"],
+  ["Identities", "identities"],
   ["Extrinsics", "extrinsics"],
   ["Transfers", "transfers"],
   ["Attestations", "attestations"],

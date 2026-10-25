@@ -442,6 +442,7 @@ Logs are one JSON object per line (`journalctl -u identitee-explorer -o cat`). S
 | `chain_changed` | The node serves other blocks than the index (reset or restore): the database is marked and the service exits 1, to be started again by systemd |
 | `genesis_changed` | At startup, after a `chain_changed` or with a node on another genesis: the old index was moved aside and a new one started |
 | `request_failed` | An API request ended in an internal error (the client gets a 500) |
+| `live_read_failed` | A read from the node failed while it was reachable (a decoding error, a state the node no longer keeps); the answer leaves that part null. Logged at most once a minute per message |
 
 A node restart does not need an explorer restart: polkadot.js reconnects, and `/api/status` says
 `"node": "down"` meanwhile, with `best` and `finalized` null (unknown) and `indexed` as it was, while

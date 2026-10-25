@@ -63,6 +63,7 @@ describe("Home", () => {
     await waitFor(() => expect(latest.textContent).toContain("1,240"));
     expect(latest.textContent).toContain("identitee-01");
     expect(text()).toContain("Accounts");
+    expect(main().querySelector('[aria-label="Counters"]')?.textContent).toContain("Identities3");
     expect(asked).toContain("/api/blocks?limit=10");
     expect(asked).toContain("/api/events?pallet=identitee&limit=10");
     // the API leaves the unsigned inherents out
@@ -288,6 +289,17 @@ describe("Account", () => {
     open(`/account/${BOB}`);
     await waitFor(() => expect(text()).toContain("The node is not answering"));
     await waitFor(() => expect(text()).toContain("No activity for this account yet."));
+  });
+
+  it("says a hash may not be indexed yet when the account came from a hex search", async () => {
+    serve({
+      ...COMMON,
+      [`/api/account/${BOB}`]: { ...account, address: BOB },
+      [`/api/account/${BOB}/history`]: { items: [], next: null },
+    });
+    open(`/account/${BOB}?from=hash`);
+    await waitFor(() => expect(text()).toContain("No activity yet. If this is a block or extrinsic hash, it may not be indexed yet."));
+    expectClean();
   });
 });
 

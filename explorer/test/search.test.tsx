@@ -52,6 +52,19 @@ describe("Search", () => {
     await waitFor(() => expect(location.pathname).toBe(`/account/${ALICE}`));
   });
 
+  it("marks an account found from 32 bytes of hex, which may be a hash not indexed yet", async () => {
+    answer(200, { kind: "account", target: ALICE, alternatives: [] } satisfies SearchResult);
+    submit(`0x${"ab".repeat(32)}`);
+    await waitFor(() => expect(location.pathname + location.search).toBe(`/account/${ALICE}?from=hash`));
+  });
+
+  it("opens an account found from its address as it is", async () => {
+    answer(200, { kind: "account", target: ALICE, alternatives: [] } satisfies SearchResult);
+    submit(ALICE);
+    await waitFor(() => expect(location.pathname).toBe(`/account/${ALICE}`));
+    expect(location.search).toBe("");
+  });
+
   it("says when nothing matches", async () => {
     answer(200, { kind: "none", target: "", alternatives: [] } satisfies SearchResult);
     submit("zzz");

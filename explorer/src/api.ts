@@ -119,6 +119,8 @@ export type Stats = {
   attestations: number;
   migrations: number;
   usernames: number;
+  /** Accounts holding an identity, counted from the indexed identitee events. */
+  identities: number;
   authorities: number | null;
 };
 

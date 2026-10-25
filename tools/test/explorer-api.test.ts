@@ -199,6 +199,7 @@ describe('status and stats', () => {
     assert.equal(s.blocks, LAST + 1);
     assert.equal(s.transfers, LAST - 1);
     assert.equal(s.attestations, 2);
+    assert.equal(s.identities, 1, 'bob, from his migrated identity');
     assert.equal(s.authorities, 2);
   });
 });
@@ -734,6 +735,35 @@ describe('connected guard', () => {
       assert.equal(account.balance, null);
     } finally {
       await guarded.close();
+    }
+  });
+});
+
+describe('failed live reads', () => {
+  it('logs a read that fails while the node is up, once a minute per message, and not a node away or slow', async () => {
+    const lines: Array<{ level: string; event: string; fields: Record<string, unknown> }> = [];
+    const log = ((level: string, event: string, fields: Record<string, unknown> = {}) => void lines.push({ level, event, fields })) as typeof quiet;
+    const f = fakeLive();
+    const api = new ExplorerApi({ store, live: f, heads: fakeHeads(), origins: [], log, liveTimeoutMs: 50 });
+    const port = await api.listen(0, '127.0.0.1');
+    const block = async (): Promise<unknown> => (await fetch(`http://127.0.0.1:${port}/api/block/3`)).json();
+    const warned = () => lines.filter((l) => l.event === 'live_read_failed');
+    try {
+      f.failLogs = true;
+      assert.equal(((await block()) as { logs: unknown }).logs, null);
+      await block();
+      assert.equal(warned().length, 1);
+      assert.equal(warned()[0]!.level, 'warn');
+      assert.equal(warned()[0]!.fields.error, 'header not found');
+      f.failLogs = false;
+      f.hang = true;
+      await block();
+      f.hang = false;
+      f.up = false;
+      await block();
+      assert.equal(warned().length, 1, 'a timeout or a node away is not logged');
+    } finally {
+      await api.close();
     }
   });
 });

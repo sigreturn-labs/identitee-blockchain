@@ -139,6 +139,13 @@ function fill(store: ExplorerStore, n: number): Fixture[] {
   return all;
 }
 
+/** `f` with identitee events of `who` appended, in this order (no extrinsic, no link). */
+function withIdentity(f: Fixture, events: Array<[method: string, who: string]>): Fixture {
+  const evs = [...f.evs];
+  for (const [method, who] of events) evs.push(ev(f.block.number, evs.length, null, 'identitee', method, { who }));
+  return { ...f, evs, block: { ...f.block, eventCount: evs.length } };
+}
+
 /** Follow `next` until null; every page must hold at most `limit` items. */
 function drain<T>(read: (cursor: string | null) => Page<T>, limit: number): T[] {
   const out: T[] = [];
@@ -168,7 +175,7 @@ afterEach(() => {
 describe('writing and reading', () => {
   it('starts empty', () => {
     assert.equal(store.lastIndexed(), null);
-    assert.deepEqual(store.counts(), { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0 });
+    assert.deepEqual(store.counts(), { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0, identities: 0 });
     assert.deepEqual(store.blocks(null, 10), { items: [], next: null });
     assert.deepEqual(store.runtimes(), []);
   });
@@ -203,7 +210,7 @@ describe('writing and reading', () => {
     assert.deepEqual(store.migrations(null, 10).items, [{ ...f.extras.migrations[0], sentence: 'bob migrated an identity' }]);
     assert.deepEqual(store.usernames(null, 10).items, [{ ...f.extras.usernames[0], sentence: 'alice claimed the name alice' }]);
 
-    assert.deepEqual(store.counts(), { blocks: 1, extrinsics: 3, events: 5, accounts: 2, transfers: 1, attestations: 1, migrations: 1, usernames: 1 });
+    assert.deepEqual(store.counts(), { blocks: 1, extrinsics: 3, events: 5, accounts: 2, transfers: 1, attestations: 1, migrations: 1, usernames: 1, identities: 1 });
   });
 
   it('keeps null and empty values as they are', () => {
@@ -274,7 +281,7 @@ describe('atomic writes', () => {
     const f = fixture(1);
     write(store, f);
     assert.throws(() => write(store, fixture(1)), /UNIQUE|PRIMARY/);
-    assert.deepEqual(store.counts(), { blocks: 1, extrinsics: 3, events: 3, accounts: 2, transfers: 1, attestations: 1, migrations: 0, usernames: 0 });
+    assert.deepEqual(store.counts(), { blocks: 1, extrinsics: 3, events: 3, accounts: 2, transfers: 1, attestations: 1, migrations: 0, usernames: 0, identities: 0 });
     assert.deepEqual(store.block(1), f.block);
   });
 
@@ -555,7 +562,7 @@ describe('genesis', () => {
 
     assert.deepEqual(a.openForGenesis(OTHER_GENESIS), { reset: true });
     assert.equal(a.lastIndexed(), null);
-    assert.deepEqual(a.counts(), { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0 });
+    assert.deepEqual(a.counts(), { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0, identities: 0 });
     assert.deepEqual(a.runtimes(), []);
     assert.deepEqual(a.blocks(null, 10), { items: [], next: null });
 
@@ -618,6 +625,24 @@ function readdirBaks(dir: string): string[] {
   return readdirSync(dir).filter((n) => n.endsWith('.bak') || /\.bak\.\d+$/.test(n));
 }
 
+describe('identities', () => {
+  it('counts the accounts whose last identity event set something', () => {
+    const st = new ExplorerStore(':memory:');
+    write(st, withIdentity(fixture(1), [['FieldSet', ALICE], ['BioSet', ALICE], ['AvatarSet', BOB]]));
+    assert.equal(st.counts().identities, 2);
+    // a field cleared alone keeps the identity; the identity cleared drops it
+    write(st, withIdentity(fixture(2), [['FieldCleared', ALICE], ['IdentityCleared', BOB]]));
+    assert.equal(st.counts().identities, 1);
+    // cleared then set again in one block: counted; set then purged in one block: not
+    write(st, withIdentity(fixture(3), [['IdentityCleared', ALICE], ['LinkAdded', ALICE], ['FieldSet', BOB], ['IdentityPurged', BOB]]));
+    assert.equal(st.counts().identities, 1);
+    // clearing an account that holds none changes nothing
+    write(st, withIdentity(fixture(4), [['IdentityPurged', BOB]]));
+    assert.equal(st.counts().identities, 1);
+    st.close();
+  });
+});
+
 describe('schema versions', () => {
   let dir: string;
   beforeEach(() => {
@@ -639,11 +664,11 @@ describe('schema versions', () => {
     const a = new ExplorerStore(path);
     write(a, fixture(1));
     a.close();
-    assert.equal(version(path), 3);
+    assert.equal(version(path), 4);
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 1);
     b.close();
-    assert.equal(version(path), 3);
+    assert.equal(version(path), 4);
   });
 
   it('adds the signed-extrinsics index to a database of version 1, rows kept', () => {
@@ -652,13 +677,13 @@ describe('schema versions', () => {
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec('DROP INDEX extrinsics_signed; DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; PRAGMA user_version = 1');
+    raw.exec("DROP INDEX extrinsics_signed; DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 1");
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 3);
     assert.deepEqual(ids(b.extrinsics(null, 10, { signed: true }).items), ['3-2', '3-1', '2-2', '2-1', '1-2', '1-1']);
     b.close();
-    assert.equal(version(path), 3);
+    assert.equal(version(path), 4);
     const check = new DatabaseSync(path);
     assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'extrinsics_signed'").get());
     check.close();
@@ -670,13 +695,13 @@ describe('schema versions', () => {
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec('DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; PRAGMA user_version = 2');
+    raw.exec("DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 2");
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 3);
     assert.equal(b.extrinsics(null, 10, { pallet: 'balances', signed: true }).items.length, b.extrinsics(null, 10, { pallet: 'balances' }).items.length);
     b.close();
-    assert.equal(version(path), 3);
+    assert.equal(version(path), 4);
     const check = new DatabaseSync(path);
     for (const name of ['extrinsics_pallet_signed', 'extrinsics_by_signer_pallet']) {
       assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name), name);
@@ -712,6 +737,25 @@ describe('schema versions', () => {
     assert.doesNotMatch(store.queryPlan('extrinsics', null).join('\n'), /TEMP B-TREE|USING INDEX/);
     assert.throws(() => store.events(null, 10, { method: 'NameClaimed' }), /needs its pallet/);
     store.close();
+  });
+
+  it('counts the identities of a database of version 3 from its events', () => {
+    const path = join(dir, 'explorer.db');
+    const a = new ExplorerStore(path);
+    write(a, withIdentity(fixture(1), [['FieldSet', ALICE], ['AvatarSet', BOB]]));
+    write(a, withIdentity(fixture(2), [['IdentityPurged', BOB], ['ProfileUpdated', ALICE]]));
+    write(a, withIdentity(fixture(3), [['IdentityCleared', ALICE], ['BioSet', ALICE]]));
+    assert.equal(a.counts().identities, 1);
+    a.close();
+    const raw = new DatabaseSync(path);
+    raw.exec("DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 3");
+    raw.close();
+    const b = new ExplorerStore(path);
+    assert.equal(b.counts().identities, 1);
+    write(b, withIdentity(fixture(4), [['FieldSet', BOB]]));
+    assert.equal(b.counts().identities, 2);
+    b.close();
+    assert.equal(version(path), 4);
   });
 
   it('refuses a database written by a newer version', () => {

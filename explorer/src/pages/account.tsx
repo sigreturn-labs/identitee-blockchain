@@ -33,8 +33,9 @@ function Roles({ roles }: { roles: NonNullable<AccountData["roles"]> }) {
 const TABS = ["History", "Transfers"] as const;
 
 export function Account() {
-  const { params } = useRoute();
+  const { params, query } = useRoute();
   const address = params.address ?? "";
+  const fromHash = query.from === "hash";
   const { data, error, reload } = useApi<AccountData>(`/api/account/${encodeURIComponent(address)}`);
   const [tab, setTab] = useState<(typeof TABS)[number]>("History");
   const now = useNow();
@@ -113,7 +114,7 @@ export function Account() {
             key={`h${base}`}
             path={`${base}/history`}
             label="History of the account"
-            empty="No activity for this account yet."
+            empty={fromHash ? "No activity yet. If this is a block or extrinsic hash, it may not be indexed yet." : "No activity for this account yet."}
             rowKey={(h) => `${h.kind}-${h.item.id}`}
             columns={[
               { label: "Block", cell: (h) => <BlockLink n={h.block} /> },

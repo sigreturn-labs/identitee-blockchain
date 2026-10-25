@@ -113,6 +113,12 @@ describe('toJson', () => {
     assert.equal(toJson(transfer.args[1]), '1500000000000');
     assert.equal(toJson(registry.createType('Bytes', '0x616c696365')), 'alice');
     assert.equal(toJson(registry.createType('Bytes', '0xff00')), '0xff00');
+    // text with control characters or bidi overrides would display other than it reads: hex
+    for (const text of ['a\u0000b', 'line\nbreak', 'tab\there', 'bell\u0007', 'del\u007f', 'abc\u202egnp.exe', 'x\u202ay', 'iso\u2066late\u2069']) {
+      const hex = `0x${Buffer.from(text, 'utf8').toString('hex')}`;
+      assert.equal(toJson(registry.createType('Bytes', hex)), hex, JSON.stringify(text));
+    }
+    assert.equal(toJson(registry.createType('Bytes', `0x${Buffer.from('café, ok', 'utf8').toString('hex')}`)), 'café, ok');
     assert.equal(toJson(registry.createType('u32', 7)), 7);
     assert.equal(toJson(registry.createType('bool', true)), true);
   });

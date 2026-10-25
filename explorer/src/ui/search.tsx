@@ -4,6 +4,7 @@ import { ApiError, get, type SearchMatch, type SearchResult } from "../api.ts";
 import { shortHash } from "../format.ts";
 
 const HINT = "Type a block number, hash, extrinsic id, address or username.";
+const HASH = /^0x[0-9a-fA-F]{64}$/;
 
 /** The page a search match opens. A username leads to its owner's account. */
 export function matchPath({ kind, target }: SearchMatch): string {
@@ -44,7 +45,10 @@ export function Search({ initial = "" }: { initial?: string }) {
         return;
       }
       setOutcome(result.alternatives.length > 0 ? { alternatives: result.alternatives } : null);
-      route(matchPath({ kind: result.kind, target: result.target }), replace);
+      // 32 bytes of hex read as a public key when no indexed block or extrinsic has that hash: the
+      // account page then says the hash may not be indexed yet
+      const path = matchPath({ kind: result.kind, target: result.target });
+      route(result.kind === "account" && HASH.test(q) ? `${path}?from=hash` : path, replace);
     } catch (error) {
       if (ticket !== latest.current) return;
       setOutcome({ problem: error instanceof ApiError && error.code === "bad_query" ? HINT : "Search is unavailable. Try again." });

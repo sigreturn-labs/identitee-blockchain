@@ -139,6 +139,8 @@ export interface Counts {
   attestations: number;
   migrations: number;
   usernames: number;
+  /** Accounts holding an identity, from the identitee events (see IDENTITY_SET). */
+  identities: number;
 }
 
 /** `next` is the cursor of the following page, null on the last one. */
@@ -283,7 +285,27 @@ const STEPS: string[] = [
   CREATE INDEX extrinsics_pallet_signed ON extrinsics (pallet, block, idx) WHERE signer IS NOT NULL;
   CREATE INDEX extrinsics_by_signer_pallet ON extrinsics (signer, pallet, block, idx);
   `,
+  `
+  -- the accounts that hold an identity: those whose last identity event set something (see IDENTITY_SET)
+  CREATE TABLE identities (address TEXT PRIMARY KEY) WITHOUT ROWID;
+  INSERT INTO identities (address)
+    SELECT who FROM (
+      SELECT json_extract(data, '$.who') AS who, method,
+        row_number() OVER (PARTITION BY json_extract(data, '$.who') ORDER BY block DESC, idx DESC) AS latest
+      FROM events
+      WHERE pallet = 'identitee' AND method IN ('BioSet', 'FieldSet', 'FieldRevealed', 'LinkAdded', 'LinkUpdated', 'AvatarSet', 'ProfileUpdated', 'MigrationFulfilled', 'IdentityCleared', 'IdentityPurged')
+    )
+    WHERE latest = 1 AND who IS NOT NULL AND method NOT IN ('IdentityCleared', 'IdentityPurged');
+  INSERT INTO totals (name, n) VALUES ('identities', (SELECT count(*) FROM identities));
+  `,
 ];
+
+/**
+ * Identitee events after which an account holds an identity, and those after which it holds none.
+ * A field cleared one by one leaves the account counted until the identity itself is cleared.
+ */
+const IDENTITY_SET = new Set(['BioSet', 'FieldSet', 'FieldRevealed', 'LinkAdded', 'LinkUpdated', 'AvatarSet', 'ProfileUpdated', 'MigrationFulfilled']);
+const IDENTITY_GONE = new Set(['IdentityCleared', 'IdentityPurged']);
 
 /** Bring `db` to the last of `steps`, each step in its own transaction; refuse a newer database. */
 export function migrate(db: DatabaseSync, steps: string[] = STEPS): void {
@@ -613,6 +635,18 @@ export class ExplorerStore {
       const insertUsername = db.prepare('INSERT INTO usernames (block, idx, name, who, kind) VALUES (?, ?, ?, ?, ?)');
       for (const u of extras.usernames) insertUsername.run(u.block, position(u.eventId)!.index, u.name, u.who, u.kind);
 
+      // in emission order, so that a clear after a set in the same block wins
+      const addIdentity = db.prepare('INSERT OR IGNORE INTO identities (address) VALUES (?)');
+      const dropIdentity = db.prepare('DELETE FROM identities WHERE address = ?');
+      let identities = 0;
+      for (const e of evs) {
+        if (e.pallet !== 'identitee') continue;
+        const who = (e.data as { who?: unknown } | null)?.who;
+        if (typeof who !== 'string') continue;
+        if (IDENTITY_SET.has(e.method)) identities += Number(addIdentity.run(who).changes);
+        else if (IDENTITY_GONE.has(e.method)) identities -= Number(dropIdentity.run(who).changes);
+      }
+
       const bump = db.prepare('UPDATE totals SET n = n + ? WHERE name = ?');
       bump.run(1, 'blocks');
       bump.run(xts.length, 'extrinsics');
@@ -622,6 +656,7 @@ export class ExplorerStore {
       bump.run(extras.attestations.length, 'attestations');
       bump.run(extras.migrations.length, 'migrations');
       bump.run(extras.usernames.length, 'usernames');
+      bump.run(identities, 'identities');
       db.exec('COMMIT');
     } catch (e) {
       db.exec('ROLLBACK');
@@ -885,7 +920,7 @@ export class ExplorerStore {
 
   counts(): Counts {
     const rows = this.db.prepare('SELECT name, n FROM totals').all() as unknown as Array<{ name: keyof Counts; n: number }>;
-    const counts: Counts = { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0 };
+    const counts: Counts = { blocks: 0, extrinsics: 0, events: 0, accounts: 0, transfers: 0, attestations: 0, migrations: 0, usernames: 0, identities: 0 };
     for (const r of rows) counts[r.name] = r.n;
     return counts;
   }

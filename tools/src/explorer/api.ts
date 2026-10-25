@@ -26,6 +26,7 @@ export const MAX_LIMIT = 100;
 export const BLOCK_TIME_MS = 6000;
 const LIVE_TIMEOUT_MS = 5000;
 const MAX_QUERY = 128;
+const WARN_EVERY_MS = 60_000;
 
 // --- Live state ----------------------------------------------------------------------------------
 
@@ -89,7 +90,10 @@ export interface HeadSource {
   onHead(cb: (h: Heads) => void): void;
 }
 
-const down = (): Promise<never> => Promise.reject(new Error('no node'));
+/** The node is not reachable, or did not answer in time: expected, never logged. */
+class NodeUnavailable extends Error {}
+
+const down = (): Promise<never> => Promise.reject(new NodeUnavailable('no node'));
 
 /** Before the first connection to the node. */
 export const OFFLINE: Live = {
@@ -289,6 +293,7 @@ export class ExplorerApi {
   private readonly maxBuffer: number;
   private readonly labels = new Map<string, string>();
   private readonly liveTimeoutMs: number;
+  private readonly warned = new Map<string, number>();
 
   constructor(options: ExplorerApiOptions) {
     this.store = options.store;
@@ -437,15 +442,31 @@ export class ExplorerApi {
     if (!this.live.connected()) return down();
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('node timeout')), this.liveTimeoutMs);
+      timer = setTimeout(() => reject(new NodeUnavailable('node timeout')), this.liveTimeoutMs);
     });
     const value = read(this.live);
     value.catch(() => undefined);
     return Promise.race([value, timeout]).finally(() => clearTimeout(timer));
   }
 
+  /** A live read, or null; a failure other than the node being away (a decoding error) is logged. */
   private orNull<T>(read: (live: Live) => Promise<T>): Promise<T | null> {
-    return this.tryLive(read).catch(() => null);
+    return this.tryLive(read).catch((e: unknown) => {
+      this.noteLiveFailure(e);
+      return null;
+    });
+  }
+
+  /** Log a failed live read at most once a minute per message. */
+  private noteLiveFailure(e: unknown): void {
+    if (e instanceof NodeUnavailable || !this.live.connected()) return;
+    const error = e instanceof Error ? e.message : String(e);
+    const now = Date.now();
+    const last = this.warned.get(error);
+    if (last !== undefined && now - last < WARN_EVERY_MS) return;
+    if (this.warned.size >= 100) this.warned.clear();
+    this.warned.set(error, now);
+    this.log('warn', 'live_read_failed', { error });
   }
 
   private times<T extends { block: number }>(items: T[]): Array<T & { timestamp: number | null }> {
