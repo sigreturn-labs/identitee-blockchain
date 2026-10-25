@@ -1,9 +1,9 @@
 # Operations
 
 How to build, deploy and run an identitee network node with its migration, verification and explorer
-services, as the public testnet is run: a single validator on a Debian 13 host, its RPC published by nginx over
-TLS. Commands run on the server as a user with `sudo`, unless they say otherwise. The templates live in
-`deploy/`.
+services, as the public testnet is run: a single validator on a Debian 13 host, its RPC published by
+nginx over TLS. Commands run on the server as a user with `sudo`, unless they say otherwise. The
+templates live in `deploy/`.
 
 ## Layout
 
@@ -260,6 +260,8 @@ cd tools && tar -czf - package.json package-lock.json tsconfig.json matrix-crypt
 - The tarball's `npm` needs Node's `bin/` in `PATH` (`#!/usr/bin/env node`).
 - `tsx` is a runtime dependency: the tools have no build step, and Node's type stripping does not cover
   constructor parameter properties. The services run `node --import tsx <entry>`.
+- `try-restart` of a unit that is not installed yet (`identitee-explorer`, before "The explorer" is set
+  up) fails with `Unit ... not found`. That is harmless: the new code is already in place.
 
 ## The migration service
 
@@ -374,8 +376,8 @@ with pruned state cannot serve either, so the first catch-up from genesis fails 
    a few blocks of each other.
 
 Configuration is by environment variables. The unit sets the defaults; to change one, create
-`/etc/identitee/explorer.env` (644, root; no secret goes in it), which systemd reads when it exists and
-which wins over the unit. `systemctl restart identitee-explorer` applies it.
+`/etc/identitee/explorer.env` (644, owner root; no secret goes in it). systemd reads it as root when it
+exists, and its values win over the unit's. `systemctl restart identitee-explorer` applies a change.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -387,8 +389,9 @@ which wins over the unit. `systemctl restart identitee-explorer` applies it.
 
 Validator labels: `EXPLORER_LABELS=/etc/identitee/explorer-labels.json` in `explorer.env`, and the file
 maps the hexadecimal public keys of the validators (the Aura and GRANDPA keys of `public-keys.json`) to
-a display name of 1 to 64 characters. Like `explorer.env` it is a plain 644 file owned by root, which
-the service user can read:
+a display name of 1 to 64 characters. Unlike `explorer.env`, this file is opened by the service itself,
+as `identitee-explorer`, so it must be 644 (owner root) and `/etc/identitee` must be traversable by
+other users, as it already is for the node's chain spec; only `secrets/` is 700:
 
 ```json
 {
@@ -404,7 +407,9 @@ repository.
 The database is derived data, so it is not in the backup (`deploy/backup.sh` archives
 `/etc/identitee`, hence the two optional files, and no explorer state). To rebuild it, stop the
 service, delete `explorer.db` with its `-wal` and `-shm` files, and start it: the service indexes from
-genesis again. The API answers meanwhile with what is indexed so far.
+genesis again. The API answers meanwhile with what is indexed so far. Do the same after restoring the
+node from an archive (see "Restoring"): the indexer does not compare parent hashes, so an index kept
+across a restore would hold blocks the restored chain no longer has.
 
 ```bash
 sudo systemctl stop identitee-explorer
@@ -492,9 +497,10 @@ them.
 3. Stop the services and extract (paths in the archive are relative to `/`):
 
    ```bash
-   sudo systemctl stop identitee-verifier identitee-migrator identitee-node
+   sudo systemctl stop identitee-explorer identitee-verifier identitee-migrator identitee-node
    sudo mv /var/lib/identitee /var/lib/identitee.broken-$(date +%F)                     # if present
    sudo mv /var/lib/identitee-verifier /var/lib/identitee-verifier.broken-$(date +%F)   # if present
+   sudo rm -f /var/lib/identitee-explorer/explorer.db*                                  # if present
    sudo tar --zstd -xpf /tmp/identitee-YYYYMMDD.tar.zst -C /
    sudo chown -R identitee:identitee /var/lib/identitee && sudo chmod 750 /var/lib/identitee
    [ -d /var/lib/identitee-verifier ] && sudo chown -R identitee-verifier:identitee-verifier /var/lib/identitee-verifier \
@@ -507,7 +513,8 @@ them.
    only if the keystore is missing.
 5. Install the units, the backup script and the timer, then
    `sudo systemctl daemon-reload && sudo systemctl enable --now identitee-node identitee-migrator identitee-verifier identitee-explorer identitee-backup.timer`;
-   set up nginx and TLS. The explorer indexes from genesis again, since its state is not archived.
+   set up nginx and TLS. The explorer is not in the archive and step 3 removed its old index, which
+   holds blocks that no longer exist after a restore: it indexes the restored chain from genesis.
 6. Check that the node resumes from the block in `.info` and finalizes, that both agents log their
    capabilities, and that `check-testnet.ts` returns `RESULT OK`.
 

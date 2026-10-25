@@ -351,7 +351,8 @@ extrinsics that are final are sent with `Cache-Control: public, max-age=300`, th
 | `/api/account/<address or hex key>` | | balance, nonce, identity summary, roles, profile link |
 | `/api/account/<address>/history` | | its extrinsics and events |
 | `/api/account/<address>/transfers` | | its transfers |
-| `/api/authorities`, `/api/authority/<id>` | `cursor`, `limit` | authorities with their agents and capabilities; one authority with its attestations |
+| `/api/authorities` | | authorities with their agents and capabilities |
+| `/api/authority/<id>` | `cursor`, `limit` | one authority, with its attestations |
 | `/api/attestations` | `authority` | requests, attestations, revocations and rejections |
 | `/api/migrations`, `/api/usernames` | | the matching event feeds |
 | `/api/runtime` | | current spec, version history with the block of each upgrade, pallets from the metadata |
