@@ -1,0 +1,35 @@
+{
+  "name": "identitee-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Block explorer of the identitee chain (Vite, TypeScript, Preact).",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sigreturn-labs/identitee-blockchain",
+    "directory": "explorer"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "11.0.1",
+    "preact-iso": "2.12.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "24.19.2",
+    "happy-dom": "21.0.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

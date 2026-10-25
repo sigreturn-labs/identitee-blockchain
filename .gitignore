@@ -10,3 +10,7 @@ node_modules/
 
 # Verifier state in development (VERIFIER_DEV=1)
 .verifier-state/
+
+# Explorer front
+explorer/node_modules/
+explorer/dist/
