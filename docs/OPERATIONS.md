@@ -1,7 +1,7 @@
 # Operations
 
-How to build, deploy and run an identitee network node with its migration and verification services,
-as the public testnet is run: a single validator on a Debian 13 host, its RPC published by nginx over
+How to build, deploy and run an identitee network node with its migration, verification and explorer
+services, as the public testnet is run: a single validator on a Debian 13 host, its RPC published by nginx over
 TLS. Commands run on the server as a user with `sudo`, unless they say otherwise. The templates live in
 `deploy/`.
 
@@ -13,25 +13,33 @@ client --wss/https--> nginx :443 --> identitee-node 127.0.0.1:9944   (--rpc-meth
                         |               /var/lib/identitee (archive node)
                         |
                         +--https--> identitee-verifier 127.0.0.1:8787
-                                    /var/lib/identitee-verifier
+                        |           /var/lib/identitee-verifier
+                        |
+                        +--https--> identitee-explorer 127.0.0.1:8788  --ws 127.0.0.1:9944--> node
+                                    /var/lib/identitee-explorer
 
 identitee-migrator --ws 127.0.0.1:9944-- node;  --wss--> People Chain public endpoints
 ```
+
+The explorer's static front is not on this server: it is deployed to Cloudflare Pages and reads the
+explorer API from the browser (see "The explorer").
 
 | Item | Location |
 |---|---|
 | Binary | `/usr/local/bin/identitee-node` |
 | Node data | `/var/lib/identitee` (chain database, keystore, network key), owner `identitee` |
-| Configuration | `/etc/identitee/`: raw chain spec, `public-keys.json` |
+| Configuration | `/etc/identitee/`: raw chain spec, `public-keys.json`, and for the explorer the optional `explorer.env` and `explorer-labels.json` |
 | Secrets | `/etc/identitee/secrets/` (root, 700; files 600) |
-| Tools (migrator, verifier) | `/opt/identitee/tools` (root, read-only), Node.js in `/opt/identitee/node` |
+| Tools (migrator, verifier, explorer) | `/opt/identitee/tools` (root, read-only), Node.js in `/opt/identitee/node` |
 | Verifier state | `/var/lib/identitee-verifier` (systemd `StateDirectory`, 700) |
+| Explorer state | `/var/lib/identitee-explorer` (systemd `StateDirectory`, 700): derived data, not backed up |
 | Backups | `/var/backups/identitee/` (root, 700) |
-| Units | `identitee-node`, `identitee-migrator`, `identitee-verifier`, `identitee-backup.{service,timer}`, `identitee-backup-failed` |
+| Units | `identitee-node`, `identitee-migrator`, `identitee-verifier`, `identitee-explorer`, `identitee-backup.{service,timer}`, `identitee-backup-failed` |
 | Firewall | SSH, 80 (certbot HTTP challenge and redirect), 443 |
 
 Every service listens on localhost; only nginx is exposed. The node is an archive node
-(`--state-pruning archive --blocks-pruning archive`): the whole history stays queryable. With a single
+(`--state-pruning archive --blocks-pruning archive`): the whole history stays queryable, which the
+explorer needs to decode old blocks. With a single
 validator, Aura produces a block every 6 s and GRANDPA finalizes with one authority of weight 1.
 
 ## Building the release binary
@@ -225,7 +233,7 @@ curl -s -H 'Content-Type: application/json' \
 
 ## Node.js and the tools
 
-The migrator and the verifier run from one shared copy of `tools/`:
+The migrator, the verifier and the explorer run from one shared copy of `tools/`:
 
 1. Install the official Node.js 24 tarball in `/opt/identitee/node-v24.x.y-linux-x64`, checked against
    its `SHASUMS256.txt`, with a link `/opt/identitee/node`.
@@ -241,7 +249,7 @@ cd tools && tar -czf - package.json package-lock.json tsconfig.json matrix-crypt
   $R npm run verify:native
   sudo rm -rf /opt/identitee/tools && sudo mv /opt/identitee/tools.new /opt/identitee/tools
   sudo chown -R root:root /opt/identitee && rm -rf $D
-  sudo systemctl try-restart identitee-migrator identitee-verifier'
+  sudo systemctl try-restart identitee-migrator identitee-verifier identitee-explorer'
 ```
 
 - `--ignore-scripts` keeps package install scripts from running as root, so the Matrix native crypto
@@ -333,6 +341,109 @@ Telegram and stale-field flows through the real service:
 cd tools && IDENTITEE_NODE_BIN=<path to identitee-node> npm run verifier:selftest    # PASS <n> steps
 ```
 
+## The explorer
+
+A block explorer at `explorer.identit.ee`: blocks, extrinsics, events, accounts, authorities,
+attestations, migrations, usernames, runtime and network. It has two parts:
+
+- `identitee-explorer`, on the server (`tools/src/explorer/`): one process that indexes the finalized
+  blocks of the local node into SQLite and serves them as a read-only JSON API, plus a stream of the
+  heads (Server-Sent Events). Endpoints and options: [tools/README.md](../tools/README.md).
+- The front (`explorer/`), a static site on Cloudflare Pages that reads the API from the browser
+  ([explorer/README.md](../explorer/README.md)).
+
+The explorer holds no key or secret, never writes to the chain, and shows only what the chain shows:
+a private field is a commitment there, and a commitment is all the explorer has.
+
+**The node must be an archive node.** Each block is decoded with the metadata of the runtime that was
+in force at that block, and the Aura author is read from the validator set at the parent block. A node
+with pruned state cannot serve either, so the first catch-up from genesis fails on it.
+
+1. DNS: an A record for the API host (`explorer-api.identit.ee`) to the server, not proxied, so certbot
+   can issue a certificate. The front's host (`explorer.identit.ee`) is a CNAME to the Pages project,
+   added as a custom domain of that project.
+2. User: `sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin identitee-explorer`.
+3. Code: as in "Node.js and the tools".
+4. Unit: `sudo install -m644 deploy/identitee-explorer.service /etc/systemd/system/`, then
+   `sudo systemctl daemon-reload && sudo systemctl enable --now identitee-explorer`.
+5. nginx and TLS with `deploy/nginx-explorer-api.conf`, as for the RPC host
+   (`certbot --nginx -d explorer-api.identit.ee`).
+6. Front: build and deploy as in [explorer/README.md](../explorer/README.md).
+7. Check: `curl -s https://<api host>/api/status` returns the heads and `"node":"up"`. While the first
+   catch-up runs, `indexed` climbs towards `finalized`; the explorer is complete when they are within
+   a few blocks of each other.
+
+Configuration is by environment variables. The unit sets the defaults; to change one, create
+`/etc/identitee/explorer.env` (644, root; no secret goes in it), which systemd reads when it exists and
+which wins over the unit. `systemctl restart identitee-explorer` applies it.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `EXPLORER_NODE` | `ws://127.0.0.1:9944` | the node's RPC endpoint |
+| `EXPLORER_PORT`, `EXPLORER_HOST` | `8788`, `127.0.0.1` | where the API listens; nginx proxies to it |
+| `EXPLORER_DB` | `/var/lib/identitee-explorer/explorer.db` | the SQLite file |
+| `EXPLORER_ORIGIN` | `https://explorer.identit.ee` | the browser origin allowed by CORS: set it to your front's |
+| `EXPLORER_LABELS` | none | a JSON file naming validator keys (below) |
+
+Validator labels: `EXPLORER_LABELS=/etc/identitee/explorer-labels.json` in `explorer.env`, and the file
+maps the hexadecimal public keys of the validators (the Aura and GRANDPA keys of `public-keys.json`) to
+a display name of 1 to 64 characters. Like `explorer.env` it is a plain 644 file owned by root, which
+the service user can read:
+
+```json
+{
+  "0x<64 hexadecimal digits>": "validator-01"
+}
+```
+
+Without it blocks show the bare key. The file is read at startup, and a restart applies a change. The
+service refuses to start, and says why, if the file is not valid JSON, if a key is not 32 bytes of
+hexadecimal, or if a label is empty or too long. Keys and labels are public; keep the file out of the
+repository.
+
+The database is derived data, so it is not in the backup (`deploy/backup.sh` archives
+`/etc/identitee`, hence the two optional files, and no explorer state). To rebuild it, stop the
+service, delete `explorer.db` with its `-wal` and `-shm` files, and start it: the service indexes from
+genesis again. The API answers meanwhile with what is indexed so far.
+
+```bash
+sudo systemctl stop identitee-explorer
+sudo rm -f /var/lib/identitee-explorer/explorer.db*
+sudo systemctl start identitee-explorer
+```
+
+After a chain reset (see "Resetting the chain") the service sees a new genesis hash, moves the old file
+aside as `explorer.db.<first 8 hex digits of the old genesis>.bak` and indexes the new chain from
+block 0. The old history is not browsable; delete the `.bak` file when it is no longer wanted.
+
+nginx limits each address to 10 requests per second (bursts of 40, then 429) and to 10 open live
+streams, and refuses any method other than GET. The streams (`/api/live`) are not buffered, and the
+comment line the service sends every 20 s keeps them from idling out; the service also caps all streams
+together at 1000. CORS is the service's: it allows `EXPLORER_ORIGIN` only.
+
+Logs are one JSON object per line (`journalctl -u identitee-explorer -o cat`). Startup:
+`listening`, `connected` (genesis), `catch_up` (from, to), then `indexed` every 1000 blocks and
+`caught_up`. Lines to act on:
+
+| Event | Meaning |
+|---|---|
+| `fatal` | The service could not start (port taken, database not writable) and exited |
+| `indexer_failed` | Catch-up was interrupted; retried with a wait that doubles from 1 s to 30 s |
+| `ingest_failed` | One block could not be decoded or stored; retried with a growing wait. A block that keeps failing holds the index at that block, and the message says why |
+| `genesis_changed` | The node is another chain: the old index was moved aside and a new one started |
+| `request_failed` | An API request ended in an internal error (the client gets a 500) |
+
+A node restart does not need an explorer restart: polkadot.js reconnects, and `/api/status` says
+`"node": "down"` meanwhile, while the indexed data keeps being served. The routes that need live state
+answer 503 `node_down` (authorities, network), or leave balance, identity and roles null (account),
+until it is back.
+
+Self-test, no network, on a throwaway `--dev --tmp` node:
+
+```bash
+cd tools && IDENTITEE_NODE_BIN=<path to identitee-node> npm run explorer:selftest    # explorer self-test: ok
+```
+
 ## Backups
 
 `deploy/backup.sh`, installed as `/usr/local/sbin/identitee-backup` (750 root), runs from
@@ -362,6 +473,8 @@ sudo cat /var/backups/identitee/LAST_FAILURE 2>/dev/null || echo "no failure pen
 sudo journalctl -u identitee-backup -o cat -n 30
 ```
 
+The explorer's database is not archived: it is derived from the chain and indexed again when missing.
+
 The archives contain secret phrases in clear: copy them off the server to encrypted storage only, and
 check the copy:
 
@@ -375,7 +488,7 @@ Restoring an archive loses the blocks produced since it was taken: with one vali
 them.
 
 1. Check the archive: `sha256sum -c identitee-YYYYMMDD.tar.zst.sha256`, and read its `.info`.
-2. On a new server: create the three system users, install the binary, Node.js and the tools.
+2. On a new server: create the four system users, install the binary, Node.js and the tools.
 3. Stop the services and extract (paths in the archive are relative to `/`):
 
    ```bash
@@ -393,8 +506,8 @@ them.
 4. Compare the public keys with `public-keys.json` (see "Keys and secrets"). Reinsert the session keys
    only if the keystore is missing.
 5. Install the units, the backup script and the timer, then
-   `sudo systemctl daemon-reload && sudo systemctl enable --now identitee-node identitee-migrator identitee-verifier identitee-backup.timer`;
-   set up nginx and TLS.
+   `sudo systemctl daemon-reload && sudo systemctl enable --now identitee-node identitee-migrator identitee-verifier identitee-explorer identitee-backup.timer`;
+   set up nginx and TLS. The explorer indexes from genesis again, since its state is not archived.
 6. Check that the node resumes from the block in `.info` and finalizes, that both agents log their
    capabilities, and that `check-testnet.ts` returns `RESULT OK`.
 
@@ -420,8 +533,9 @@ Nothing is automatic. Check by hand:
 - `npx tsx src/check-testnet.ts` from a checkout of `tools/`: best and finalized blocks advance within
   12 s and the chain properties are right; its last line is `RESULT OK|FAIL ...` and its exit code is 0
   only on success;
-- `systemctl is-active identitee-node identitee-migrator identitee-verifier` and
-  `curl -s https://<verify host>/api/health`;
+- `systemctl is-active identitee-node identitee-migrator identitee-verifier identitee-explorer`,
+  `curl -s https://<verify host>/api/health` and `curl -s https://<api host>/api/status` (`node` is
+  `up`, `indexed` within a few blocks of `finalized`);
 - the backup marker `LAST_FAILURE`;
 - certificate expiry: `sudo certbot certificates`.
 
@@ -454,6 +568,8 @@ old chain.
 3. Restart the migrator and the verifier, or reinstall the tools if they changed with the runtime. Both
    agents must exist in the new genesis: each checks its capabilities at startup and stops otherwise.
 4. Commit the new chain spec.
+
+The explorer needs no action after a reset: it moves its old index aside and indexes the new chain.
 
 The verifier's `verifier.db` survives a reset, including the register of KYC documents (one document,
 one address). To start afresh, stop the verifier and move `verifier.db` aside; the `.key` files and

@@ -8,7 +8,8 @@ TypeScript tooling for the identitee chain:
 | `src/people.ts` | Reads an identity from a People Chain (Polkadot, Kusama) as a migration payload |
 | `src/migrator.ts` | Migration service: serves `request_migration` requests |
 | `src/verifier/` | Verification service: attests fields whose owner proves control of them |
-| `src/migrator-selftest.ts`, `src/verifier-selftest.ts` | Self-tests of the two services on a throwaway dev node |
+| `src/explorer/` | Block explorer: indexes the finalized blocks into SQLite and serves a read-only JSON API |
+| `src/migrator-selftest.ts`, `src/verifier-selftest.ts`, `src/explorer-selftest.ts` | Self-tests of the three services on a throwaway dev node |
 | `src/check-testnet.ts` | Read-only smoke check of a public node |
 | `src/make-fixtures.ts` | Builds the synthetic People Chain test fixtures |
 
@@ -290,6 +291,88 @@ Email and Telegram, and runs the real service as a child with a fake Resend and 
 API on the loopback. It drives the email and Telegram flows over HTTP, a stale field (409), a disabled
 channel (503), then checks that no secret appears in the output, that stdout is JSON lines, and that
 `SIGTERM` exits 0. About 45 s.
+
+## Block explorer
+
+`src/explorer/` indexes the finalized blocks of a node and serves them as a read-only JSON API, for
+the explorer front ([explorer/README.md](../explorer/README.md)). It holds no key and never writes to
+the chain. Deploying it is covered in [docs/OPERATIONS.md](../docs/OPERATIONS.md) ("The explorer").
+
+```bash
+EXPLORER_DB=./explorer.db EXPLORER_DEV=1 npm run explorer
+```
+
+| Variable | Meaning |
+|---|---|
+| `EXPLORER_NODE` | node RPC endpoint (default `ws://127.0.0.1:9944`); an archive node, see below |
+| `EXPLORER_DB` | SQLite file of the index (default `/var/lib/identitee-explorer/explorer.db`; its directory is created) |
+| `EXPLORER_PORT`, `EXPLORER_HOST` | where the API listens (default `8788`, `127.0.0.1`) |
+| `EXPLORER_ORIGIN` | the browser origin allowed by CORS (default `https://explorer.identit.ee`) |
+| `EXPLORER_DEV` | `1`: CORS also allows `http://localhost:5174`, the front's dev server |
+| `EXPLORER_LABELS` | a JSON file `{ "<0x + 64 hex digits>": "label" }` naming validator keys (optional) |
+
+An invalid value exits with code 2 and a message.
+
+Behaviour:
+
+- It indexes finalized blocks only, from genesis, then follows finality. Blocks above the finalized
+  head are never stored, so there is no reorg handling. Balances, identities, roles, authorities and
+  validators are read from the node when asked, not indexed.
+- It needs an archive node: each block is decoded with the metadata of the runtime in force at that
+  block (runtime upgrades are recorded), and the Aura author is read from the validator set at the
+  parent block. The identitee events become sentences, and the calls inside `sudo` are decoded too.
+- Each block shows who produced it (the Aura author) and the GRANDPA authority set in force at it. The
+  exact signers are decoded only from the blocks that carry a stored justification, one every 512.
+- The index is tied to the genesis hash. On another chain the old file is moved to
+  `<EXPLORER_DB>.<first 8 hex digits of the old genesis>.bak` and the index starts again.
+- The API starts listening before the node answers, and keeps serving the index when the node is down;
+  `/api/status` says `"node": "down"`. An indexer that fails is retried with a wait that doubles from
+  1 s to 30 s.
+- Logs are one JSON object per line on stdout. `SIGTERM` or `SIGINT` stops the indexer, then the HTTP
+  server, then closes the database, and exits 0.
+
+### HTTP API
+
+GET only. Answers are JSON; errors are `{ "error": "<code>" }`: 400 for bad input (`bad_cursor`,
+`bad_limit`, `bad_address`, `bad_id`, `bad_query`...), 404 `not_found`, 405 for any other method, 503
+`node_down` for a route that needs the node while it is away. A list returns `{ items, next }`: pass
+`next` back as `cursor` for the following page, `limit` is 25 by default and 100 at most. Blocks and
+extrinsics that are final are sent with `Cache-Control: public, max-age=300`, the rest with `no-store`.
+
+| Route | Query | Answer |
+|---|---|---|
+| `/api/status` | | best, finalized and indexed heights, `node` (`up` or `down`), spec version, genesis |
+| `/api/stats` | | counts: blocks, extrinsics, events, accounts, transfers, attestations, migrations, usernames; authorities |
+| `/api/blocks` | `cursor`, `limit` | latest blocks first, with the author and its label |
+| `/api/block/<number or hash>` | | the block: author, authority set, justification signers, digest logs, extrinsics, events |
+| `/api/extrinsics` | `signer`, `pallet`, `signed=1` | extrinsics, newest first |
+| `/api/extrinsic/<hash or block-index>` | | the decoded call, signer, nonce, tip, fee, result and events |
+| `/api/events` | `pallet`, `method` | events, newest first, with a sentence for those the explorer explains (every identitee event) |
+| `/api/account/<address or hex key>` | | balance, nonce, identity summary, roles, profile link |
+| `/api/account/<address>/history` | | its extrinsics and events |
+| `/api/account/<address>/transfers` | | its transfers |
+| `/api/authorities`, `/api/authority/<id>` | `cursor`, `limit` | authorities with their agents and capabilities; one authority with its attestations |
+| `/api/attestations` | `authority` | requests, attestations, revocations and rejections |
+| `/api/migrations`, `/api/usernames` | | the matching event feeds |
+| `/api/runtime` | | current spec, version history with the block of each upgrade, pallets from the metadata |
+| `/api/network` | | validators (Aura and GRANDPA keys with labels), peer count, block time |
+| `/api/search` | `q` | what the term is: `block`, `extrinsic`, `account`, `username` or `none`, with its target |
+| `/api/live` | | Server-Sent Events: a `head` event with best, finalized and indexed when one moves |
+
+`/api/live` is capped at 1000 clients (503 `too_many_clients` beyond) and drops a client that does not
+read what it is sent.
+
+### Tests and self-test
+
+`npm test` covers the store, decoding, indexer and API without a node. The self-test runs the real
+indexer against a throwaway `identitee-node --dev --tmp`, submits calls with the development keys and
+checks what is stored:
+
+```bash
+IDENTITEE_NODE_BIN=../target/release/identitee-node npm run explorer:selftest
+```
+
+It prints `OK <step>` or `FAIL <step>: <reason>`, then `explorer self-test: ok` if every step passed.
 
 ## Notes for client authors
 

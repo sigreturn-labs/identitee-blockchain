@@ -17,7 +17,7 @@ brought over, judgements included.
 Identity writes are feeless, so a new account can create its profile without holding tokens.
 Per-account quotas protect the chain from abuse.
 
-The public testnet runs at `wss://rpc.identit.ee`. Its web front, [identit.ee](https://identit.ee), is in restricted access while the testnet runs.
+The public testnet runs at `wss://rpc.identit.ee`. Its web front, [identit.ee](https://identit.ee), is in restricted access while the testnet runs. Its block explorer, [explorer.identit.ee](https://explorer.identit.ee), is public.
 
 ## How it works
 
@@ -58,8 +58,9 @@ flowchart LR
 | `pallets/identitee` | The identity pallet: profiles, fields, authorities, attestations, trust levels, names, sub-accounts, migration, quotas |
 | `runtime` | The chain runtime (Aura, GRANDPA, Balances, Sudo and the identity pallet) |
 | `node` | The node binary, `identitee-node` |
-| `tools` | TypeScript services and tooling: the People Chain migrator, the verification service, end-to-end scenarios |
+| `tools` | TypeScript services and tooling: the People Chain migrator, the verification service, the explorer's indexer and API, end-to-end scenarios |
 | `web` | The web front, a Preact single-page application |
+| `explorer` | The block explorer's front, a Preact single-page application that reads the explorer API |
 | `deploy` | Release build, systemd units, nginx configuration, backups, testnet chain spec |
 | `docs` | Architecture, verification service, operations, manual testing, DID format |
 
@@ -70,7 +71,7 @@ flowchart LR
 - [Operations](docs/OPERATIONS.md): building, deploying and running a node and its services
 - [Manual testing](docs/TESTING.md): exercising the chain from polkadot.js/apps
 - [DID method](docs/DID.md): the planned `did:identitee` format
-- [Tools](tools/README.md) and [web front](web/README.md): developer guides for each package
+- [Tools](tools/README.md), [web front](web/README.md) and [explorer](explorer/README.md): developer guides for each package
 
 ## Chain parameters
 
@@ -85,8 +86,8 @@ flowchart LR
 ## Build and test
 
 Prerequisites: the Rust toolchain pinned in `rust-toolchain.toml` (installed by `rustup` on first
-use), `protobuf-compiler`, `clang`, `libclang-dev` and `libssl-dev`. The `tools` and `web` packages
-need Node.js 24.
+use), `protobuf-compiler`, `clang`, `libclang-dev` and `libssl-dev`. The `tools`, `web` and
+`explorer` packages need Node.js 24.
 
 ```bash
 cargo build --release
@@ -99,6 +100,7 @@ cargo test --workspace
 ```bash
 cd web && npm ci && VITE_RPC=ws://127.0.0.1:9944 npm run dev   # web front against the local node
 cd tools && npm ci && npm test                                   # tools test suite
+cd explorer && npm ci && npm test                                # explorer front test suite
 ```
 
 ## Contributing

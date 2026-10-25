@@ -1,0 +1,78 @@
+# identitee block explorer, indexer and API (tools/src/explorer/main.ts), installed as
+# /etc/systemd/system/identitee-explorer.service. See docs/OPERATIONS.md ("The explorer").
+#
+# It reads the finalized blocks of the local node, which must be an archive node (every block is
+# decoded with the runtime in force at that block), indexes them into SQLite and serves them as a
+# read-only JSON API with a Server-Sent Events stream of the heads. HTTP on 127.0.0.1:8788 behind
+# nginx (deploy/nginx-explorer-api.conf). The static front is deployed separately to Cloudflare
+# Pages (explorer/README.md).
+#
+# No secret and no key: the service only reads. Optional settings (EXPLORER_ORIGIN, EXPLORER_LABELS)
+# go in /etc/identitee/explorer.env, which may be absent; systemd reads it as root.
+#
+# State: /var/lib/identitee-explorer (StateDirectory, 0700, the only writable path): explorer.db
+# and its WAL files. It is derived from the chain, so it is not in deploy/backup.sh: deleting it
+# makes the service index again from genesis. After a testnet reset the service moves the old file
+# aside as explorer.db.<old genesis>.bak and starts again from the new genesis.
+#
+# Runtime: Node 24 in /opt/identitee/node, tools/ in /opt/identitee/tools (shared with the migrator
+# and the verifier), installed as docs/OPERATIONS.md says. SQLite is Node's own (node:sqlite).
+
+[Unit]
+Description=identitee block explorer (indexer and API)
+After=identitee-node.service
+# Not Requires=: polkadot.js reconnects to a restarted node by itself, and the API keeps serving the
+# index (/api/status says "node": "down") while the node is away. The nightly backup stops the node
+# for about a second and does not stop this service.
+
+[Service]
+Type=simple
+User=identitee-explorer
+Group=identitee-explorer
+WorkingDirectory=/opt/identitee/tools
+Environment=EXPLORER_NODE=ws://127.0.0.1:9944
+Environment=EXPLORER_PORT=8788
+Environment=EXPLORER_DB=/var/lib/identitee-explorer/explorer.db
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/identitee/explorer.env
+ExecStart=/opt/identitee/node/bin/node --import tsx src/explorer/main.ts
+StateDirectory=identitee-explorer
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=15
+# On SIGTERM the service waits up to 30 s for the block being written, then exits.
+TimeoutStopSec=45
+
+# Hardening, as the verifier. Not MemoryDenyWriteExecute: V8 is a JIT. tsx caches its transpiled
+# files in the private /tmp. Unlike the verifier it needs no outbound network: it talks to the node
+# and to nginx on the loopback only, so every other address is denied.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
