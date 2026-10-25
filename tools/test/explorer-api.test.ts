@@ -185,10 +185,13 @@ describe('blocks', () => {
   it('caps the limit at 100 and defaults it to 25', async () => {
     assert.equal((await ok('/api/blocks')).items.length, 25);
     assert.equal((await ok('/api/blocks?limit=5000')).items.length, 100);
+    assert.equal((await ok('/api/blocks?limit=1000000')).items.length, 100);
+    assert.equal((await ok(`/api/blocks?limit=${'9'.repeat(400)}`)).items.length, 100);
+    assert.equal((await ok('/api/blocks?limit=007')).items.length, 7);
   });
 
   it('refuses a bad limit or cursor with 400', async () => {
-    for (const q of ['limit=0', 'limit=-1', 'limit=abc', 'cursor=abc', 'cursor=-3', `cursor=${'9'.repeat(30)}`]) {
+    for (const q of ['limit=0', 'limit=000', 'limit=-1', 'limit=abc', 'limit=1e3', 'limit=', 'cursor=abc', 'cursor=-3', `cursor=${'9'.repeat(30)}`]) {
       const r = await get(`/api/blocks?${q}`);
       assert.equal(r.status, 400, q);
       assert.match(r.body.error, /^bad_(limit|cursor)$/);
@@ -419,6 +422,16 @@ describe('http', () => {
     assert.equal(other.headers.get('access-control-allow-origin'), null);
   });
 
+  it('varies on Origin on every answer, cacheable ones included', async () => {
+    for (const init of [{}, { headers: { origin: DEFAULT_ORIGIN } }, { headers: { origin: 'https://example.com' } }]) {
+      const block = await get('/api/block/3', init);
+      assert.match(block.headers.get('cache-control') ?? '', /max-age/);
+      assert.equal(block.headers.get('vary'), 'Origin');
+      assert.equal((await get('/api/extrinsic/3-1', init)).headers.get('vary'), 'Origin');
+      assert.equal((await get('/api/nothing', init)).headers.get('vary'), 'Origin');
+    }
+  });
+
   it('answers 405 to anything but GET and 404 to an unknown path', async () => {
     for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
       const r = await get('/api/blocks', { method });
@@ -463,6 +476,35 @@ describe('live', () => {
   });
 });
 
+describe('live clients cap', () => {
+  it('refuses a stream over the cap with 503 too_many_clients, and takes one again when a client leaves', { timeout: 5000 }, async () => {
+    const capped = new ExplorerApi({ store, live, heads: fakeHeads(), origins: [DEFAULT_ORIGIN], log: quiet, maxClients: 1 });
+    const url = `http://127.0.0.1:${await capped.listen(0, '127.0.0.1')}/api/live`;
+    try {
+      const first = new AbortController();
+      const res = await fetch(url, { signal: first.signal });
+      assert.equal(res.status, 200);
+      await res.body!.getReader().read();
+      const refused = await fetch(url);
+      assert.equal(refused.status, 503);
+      assert.deepEqual(await refused.json(), { error: 'too_many_clients' });
+      first.abort();
+      for (let i = 0; i < 50; i++) {
+        const again = await fetch(url);
+        if (again.status === 200) {
+          await again.body!.cancel();
+          return;
+        }
+        await again.text();
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      assert.fail('the slot of the closed client was never freed');
+    } finally {
+      await capped.close();
+    }
+  });
+});
+
 describe('node down', () => {
   it('keeps serving the index and says the node is down', async () => {
     live.up = false;
@@ -483,6 +525,23 @@ describe('node down', () => {
       assert.equal((await ok('/api/search?q=alice')).kind, 'none');
     } finally {
       live.up = true;
+    }
+  });
+});
+
+describe('connected guard', () => {
+  it('does not read from a node that says it is disconnected', async () => {
+    const stale = { ...fakeLive(), connected: () => false };
+    const guarded = new ExplorerApi({ store, live: stale, heads: fakeHeads(), origins: [], log: quiet });
+    const port = await guarded.listen(0, '127.0.0.1');
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/network`);
+      assert.equal(res.status, 503);
+      assert.deepEqual(await res.json(), { error: 'node_down' });
+      const account = (await (await fetch(`http://127.0.0.1:${port}/api/account/${ALICE}`)).json()) as { balance: unknown };
+      assert.equal(account.balance, null);
+    } finally {
+      await guarded.close();
     }
   });
 });

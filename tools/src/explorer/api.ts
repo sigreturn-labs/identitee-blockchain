@@ -227,6 +227,10 @@ export interface ExplorerApiOptions {
   pingMs?: number;
   /** How often the SSE stream checks whether the index moved (default 1 s). */
   pollMs?: number;
+  /** Most SSE clients at once (default 1000); more get 503 `too_many_clients`. */
+  maxClients?: number;
+  /** Bytes a client may leave unread before it is dropped (default 64 KB). */
+  maxBuffer?: number;
 }
 
 export class ExplorerApi {
@@ -242,6 +246,8 @@ export class ExplorerApi {
   private timers: NodeJS.Timeout[] = [];
   private readonly pingMs: number;
   private readonly pollMs: number;
+  private readonly maxClients: number;
+  private readonly maxBuffer: number;
 
   constructor(options: ExplorerApiOptions) {
     this.store = options.store;
@@ -250,6 +256,8 @@ export class ExplorerApi {
     this.log = options.log;
     this.pingMs = options.pingMs ?? 20_000;
     this.pollMs = options.pollMs ?? 1000;
+    this.maxClients = options.maxClients ?? 1000;
+    this.maxBuffer = options.maxBuffer ?? 64 * 1024;
     if (options.heads !== undefined) this.attach(this.live, options.heads);
     this.routes = this.table();
   }
@@ -302,14 +310,29 @@ export class ExplorerApi {
     const data = JSON.stringify(this.headState());
     if (data === this.lastSent) return;
     this.lastSent = data;
-    for (const res of this.clients) res.write(`event: head\ndata: ${data}\n\n`);
+    for (const res of this.clients) this.send(res, `event: head\ndata: ${data}\n\n`);
   }
 
   private ping(): void {
-    for (const res of this.clients) res.write(': ping\n\n');
+    for (const res of this.clients) this.send(res, ': ping\n\n');
+  }
+
+  /** Write to a stream client, or drop it if it does not read what it was sent. */
+  private send(res: ServerResponse, chunk: string): void {
+    if (res.writableLength > this.maxBuffer) {
+      this.clients.delete(res);
+      res.destroy();
+      return;
+    }
+    res.write(chunk);
   }
 
   private stream(res: ServerResponse, headers: Record<string, string>): void {
+    if (this.clients.size >= this.maxClients) {
+      res.writeHead(503, { ...headers, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ error: 'too_many_clients' }));
+      return;
+    }
     res.writeHead(200, { ...headers, 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'x-accel-buffering': 'no' });
     res.write(`event: head\ndata: ${JSON.stringify(this.headState())}\n\n`);
     this.clients.add(res);
@@ -319,12 +342,10 @@ export class ExplorerApi {
   // --- Requests ---
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const headers: Record<string, string> = { 'x-content-type-options': 'nosniff' };
+    // Vary on every answer: a shared cache must not hand a response without CORS to an allowed origin
+    const headers: Record<string, string> = { 'x-content-type-options': 'nosniff', vary: 'Origin' };
     const origin = req.headers.origin;
-    if (origin !== undefined && this.origins.has(origin)) {
-      headers['access-control-allow-origin'] = origin;
-      headers.vary = 'Origin';
-    }
+    if (origin !== undefined && this.origins.has(origin)) headers['access-control-allow-origin'] = origin;
     const json = (status: number, value: unknown, cache = 'no-store'): void => {
       res.writeHead(status, { ...headers, 'content-type': 'application/json; charset=utf-8', 'cache-control': cache });
       res.end(JSON.stringify(value));
@@ -557,8 +578,9 @@ export class ExplorerApi {
 function limitOf(q: URLSearchParams): number {
   const text = q.get('limit');
   if (text === null) return DEFAULT_LIMIT;
-  if (!/^\d{1,6}$/.test(text) || Number(text) === 0) throw new ApiError(400, 'bad_limit');
-  return Math.min(Number(text), MAX_LIMIT);
+  if (!/^\d+$/.test(text) || /^0+$/.test(text)) throw new ApiError(400, 'bad_limit');
+  // any larger number of digits is just "as many as allowed"
+  return text.length > 3 ? MAX_LIMIT : Math.min(Number(text), MAX_LIMIT);
 }
 
 function cursorOf(q: URLSearchParams): string | null {
