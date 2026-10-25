@@ -461,7 +461,7 @@ export class ExplorerApi {
       [/^\/api\/block\/([^/]+)$/, ([id]) => this.block(id!), true],
       [/^\/api\/extrinsics$/, (_p, q) => this.page(s.extrinsics(cursorOf(q), limitOf(q), { signer: optAddress(q, 'signer'), pallet: optIdent(q, 'pallet'), signed: optFlag(q, 'signed') }), summarize)],
       [/^\/api\/extrinsic\/([^/]+)$/, ([id]) => this.extrinsic(id!), true],
-      [/^\/api\/events$/, (_p, q) => this.page(s.events(cursorOf(q), limitOf(q), { pallet: optIdent(q, 'pallet'), method: optIdent(q, 'method') }))],
+      [/^\/api\/events$/, (_p, q) => this.page(s.events(cursorOf(q), limitOf(q), eventFilter(q)))],
       [/^\/api\/account\/([^/]+)$/, ([a]) => this.account(a!)],
       [/^\/api\/account\/([^/]+)\/history$/, ([a], q) => this.history(address(a!), q)],
       [/^\/api\/account\/([^/]+)\/transfers$/, ([a], q) => this.page(s.transfers(address(a!), cursorOf(q), limitOf(q)))],
@@ -694,6 +694,14 @@ function optIdent(q: URLSearchParams, key: string): string | undefined {
   if (v === null || v === '') return undefined;
   if (!IDENT.test(v)) throw new ApiError(400, `bad_${key}`);
   return v;
+}
+
+/** A method alone would walk every event: it is only an index range under its pallet. */
+function eventFilter(q: URLSearchParams): { pallet?: string; method?: string } {
+  const pallet = optIdent(q, 'pallet');
+  const method = optIdent(q, 'method');
+  if (method !== undefined && pallet === undefined) throw new ApiError(400, 'method_needs_pallet');
+  return { pallet, method };
 }
 
 function optNumber(q: URLSearchParams, key: string): number | undefined {

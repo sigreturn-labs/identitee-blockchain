@@ -639,11 +639,11 @@ describe('schema versions', () => {
     const a = new ExplorerStore(path);
     write(a, fixture(1));
     a.close();
-    assert.equal(version(path), 2);
+    assert.equal(version(path), 3);
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 1);
     b.close();
-    assert.equal(version(path), 2);
+    assert.equal(version(path), 3);
   });
 
   it('adds the signed-extrinsics index to a database of version 1, rows kept', () => {
@@ -652,32 +652,66 @@ describe('schema versions', () => {
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec('DROP INDEX extrinsics_signed; PRAGMA user_version = 1');
+    raw.exec('DROP INDEX extrinsics_signed; DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; PRAGMA user_version = 1');
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 3);
     assert.deepEqual(ids(b.extrinsics(null, 10, { signed: true }).items), ['3-2', '3-1', '2-2', '2-1', '1-2', '1-1']);
     b.close();
-    assert.equal(version(path), 2);
+    assert.equal(version(path), 3);
     const check = new DatabaseSync(path);
     assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'extrinsics_signed'").get());
     check.close();
   });
 
-  it('reads the signed list from its partial index, not by scanning every extrinsic', () => {
+  it('adds the filter indexes to a database of version 2, rows kept', () => {
     const path = join(dir, 'explorer.db');
     const a = new ExplorerStore(path);
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    const plan = (sql: string): string =>
-      (raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join('\n');
-    assert.match(plan('SELECT * FROM extrinsics WHERE 1 AND signer IS NOT NULL ORDER BY block DESC, idx DESC LIMIT 26'), /extrinsics_signed/);
-    assert.match(
-      plan('SELECT * FROM extrinsics WHERE (block, idx) < (2, 1) AND signer IS NOT NULL ORDER BY block DESC, idx DESC LIMIT 26'),
-      /extrinsics_signed/,
-    );
+    raw.exec('DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; PRAGMA user_version = 2');
     raw.close();
+    const b = new ExplorerStore(path);
+    assert.equal(b.lastIndexed(), 3);
+    assert.equal(b.extrinsics(null, 10, { pallet: 'balances', signed: true }).items.length, b.extrinsics(null, 10, { pallet: 'balances' }).items.length);
+    b.close();
+    assert.equal(version(path), 3);
+    const check = new DatabaseSync(path);
+    for (const name of ['extrinsics_pallet_signed', 'extrinsics_by_signer_pallet']) {
+      assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name), name);
+    }
+    check.close();
+  });
+
+  it('reads every filtered list from one index range, never a whole table', () => {
+    const store = new ExplorerStore(':memory:');
+    const xt: Array<[Record<string, unknown>, string]> = [
+      [{ signed: true }, 'extrinsics_signed'],
+      [{ pallet: 'balances' }, 'extrinsics_by_pallet'],
+      [{ pallet: 'balances', signed: true }, 'extrinsics_pallet_signed'],
+      [{ signer: ALICE }, 'extrinsics_by_signer'],
+      [{ signer: ALICE, signed: true }, 'extrinsics_by_signer'],
+      [{ signer: ALICE, pallet: 'balances' }, 'extrinsics_by_signer_pallet'],
+      [{ signer: ALICE, pallet: 'balances', signed: true }, 'extrinsics_by_signer_pallet'],
+    ];
+    const ev: Array<[Record<string, unknown>, string]> = [
+      [{ pallet: 'identitee' }, 'events_by_pallet'],
+      [{ pallet: 'identitee', method: 'NameClaimed' }, 'events_by_name'],
+    ];
+    for (const [list, cases] of [['extrinsics', xt], ['events', ev]] as const) {
+      for (const [filter, index] of cases) {
+        for (const cursor of [null, '2-1']) {
+          const plan = store.queryPlan(list, cursor, filter).join('\n');
+          assert.match(plan, new RegExp(`^(SEARCH|SCAN) ${list} USING INDEX ${index}\\b`), `${list} ${JSON.stringify(filter)} ${cursor}: ${plan}`);
+          assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+        }
+      }
+    }
+    // unfiltered: the primary key, newest first, stopped by the limit
+    assert.doesNotMatch(store.queryPlan('extrinsics', null).join('\n'), /TEMP B-TREE|USING INDEX/);
+    assert.throws(() => store.events(null, 10, { method: 'NameClaimed' }), /needs its pallet/);
+    store.close();
   });
 
   it('refuses a database written by a newer version', () => {

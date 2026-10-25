@@ -278,6 +278,11 @@ const STEPS: string[] = [
   -- the list of signed extrinsics only: without it, every unsigned inherent is scanned one by one
   CREATE INDEX extrinsics_signed ON extrinsics (block, idx) WHERE signer IS NOT NULL;
   `,
+  `
+  -- every filter combination of the extrinsic list reads one index range (the API is synchronous)
+  CREATE INDEX extrinsics_pallet_signed ON extrinsics (pallet, block, idx) WHERE signer IS NOT NULL;
+  CREATE INDEX extrinsics_by_signer_pallet ON extrinsics (signer, pallet, block, idx);
+  `,
 ];
 
 /** Bring `db` to the last of `steps`, each step in its own transaction; refuse a newer database. */
@@ -333,6 +338,62 @@ function olderThan(cursor: string | null, alias: string): { sql: string; params:
   const at = position(cursor);
   if (at === null) throw new BadCursorError(cursor);
   return { sql: `(${alias}block, ${alias}idx) < (?, ?)`, params: [at.block, at.index] };
+}
+
+export interface ExtrinsicFilter {
+  signer?: string;
+  pallet?: string;
+  signed?: boolean;
+}
+
+export interface EventFilter {
+  pallet?: string;
+  method?: string;
+}
+
+// The index each filter combination reads, newest first over (block, idx); named so that the
+// planner never falls back to walking the whole table and filtering.
+function extrinsicsIndex(f: ExtrinsicFilter): string | null {
+  if (f.signer !== undefined) return f.pallet !== undefined ? 'extrinsics_by_signer_pallet' : 'extrinsics_by_signer';
+  if (f.pallet !== undefined) return f.signed === true ? 'extrinsics_pallet_signed' : 'extrinsics_by_pallet';
+  return f.signed === true ? 'extrinsics_signed' : null;
+}
+
+function extrinsicsQuery(cursor: string | null, f: ExtrinsicFilter): { sql: string; params: SQLInputValue[] } {
+  const older = olderThan(cursor, '');
+  const where = [older.sql];
+  const params: SQLInputValue[] = [...older.params];
+  // a signer implies a signature: the signer indexes already hold signed extrinsics only
+  if (f.signed === true) where.push('signer IS NOT NULL');
+  if (f.signer !== undefined) {
+    where.push('signer = ?');
+    params.push(f.signer);
+  }
+  if (f.pallet !== undefined) {
+    where.push('pallet = ?');
+    params.push(f.pallet);
+  }
+  const index = extrinsicsIndex(f);
+  const from = index === null ? 'extrinsics' : `extrinsics INDEXED BY ${index}`;
+  return { sql: `SELECT * FROM ${from} WHERE ${where.join(' AND ')} ORDER BY block DESC, idx DESC LIMIT ?`, params };
+}
+
+function eventsQuery(cursor: string | null, f: EventFilter): { sql: string; params: SQLInputValue[] } {
+  if (f.method !== undefined && f.pallet === undefined) throw new RangeError('an event method filter needs its pallet');
+  const older = olderThan(cursor, '');
+  const where = [older.sql];
+  const params: SQLInputValue[] = [...older.params];
+  if (f.pallet !== undefined) {
+    where.push('pallet = ?');
+    params.push(f.pallet);
+  }
+  if (f.method !== undefined) {
+    where.push('method = ?');
+    params.push(f.method);
+  }
+  const index = f.method !== undefined ? 'events_by_name' : f.pallet !== undefined ? 'events_by_pallet' : null;
+  const from = index === null ? 'events' : `events INDEXED BY ${index}`;
+  return { sql: `SELECT * FROM ${from} WHERE ${where.join(' AND ')} ORDER BY block DESC, idx DESC LIMIT ?`, params };
 }
 
 interface RawBlock {
@@ -650,40 +711,26 @@ export class ExplorerStore {
   }
 
   /** Extrinsics newest first. `cursor` is the id of the last extrinsic of the previous page. `signed` keeps those with a signer. */
-  extrinsics(cursor: string | null, limit: number, filter: { signer?: string; pallet?: string; signed?: boolean } = {}): Page<ExtrinsicRow> {
+  extrinsics(cursor: string | null, limit: number, filter: ExtrinsicFilter = {}): Page<ExtrinsicRow> {
     checkLimit(limit);
-    const older = olderThan(cursor, '');
-    const where = [older.sql];
-    const params: SQLInputValue[] = [...older.params];
-    if (filter.signed === true) where.push('signer IS NOT NULL');
-    if (filter.signer !== undefined) {
-      where.push('signer = ?');
-      params.push(filter.signer);
-    }
-    if (filter.pallet !== undefined) {
-      where.push('pallet = ?');
-      params.push(filter.pallet);
-    }
-    const rows = this.db.prepare(`SELECT * FROM extrinsics WHERE ${where.join(' AND ')} ORDER BY block DESC, idx DESC LIMIT ?`).all(...params, limit + 1) as unknown as RawExtrinsic[];
+    const q = extrinsicsQuery(cursor, filter);
+    const rows = this.db.prepare(q.sql).all(...q.params, limit + 1) as unknown as RawExtrinsic[];
     return paginate(rows.map(toExtrinsic), limit, (x) => x.id);
   }
 
-  /** Events newest first. `cursor` is the id of the last event of the previous page. */
-  events(cursor: string | null, limit: number, filter: { pallet?: string; method?: string } = {}): Page<EventRow> {
+  /** Events newest first. `cursor` is the id of the last event of the previous page. A method needs its pallet. */
+  events(cursor: string | null, limit: number, filter: EventFilter = {}): Page<EventRow> {
     checkLimit(limit);
-    const older = olderThan(cursor, '');
-    const where = [older.sql];
-    const params: SQLInputValue[] = [...older.params];
-    if (filter.pallet !== undefined) {
-      where.push('pallet = ?');
-      params.push(filter.pallet);
-    }
-    if (filter.method !== undefined) {
-      where.push('method = ?');
-      params.push(filter.method);
-    }
-    const rows = this.db.prepare(`SELECT * FROM events WHERE ${where.join(' AND ')} ORDER BY block DESC, idx DESC LIMIT ?`).all(...params, limit + 1) as unknown as RawEvent[];
+    const q = eventsQuery(cursor, filter);
+    const rows = this.db.prepare(q.sql).all(...q.params, limit + 1) as unknown as RawEvent[];
     return paginate(rows.map(toEvent), limit, (e) => e.id);
+  }
+
+  /** SQLite's query plan of a filtered list, one line per step (for the tests: no list may scan a table). */
+  queryPlan(list: 'extrinsics' | 'events', cursor: string | null, filter: ExtrinsicFilter & EventFilter = {}): string[] {
+    const q = list === 'extrinsics' ? extrinsicsQuery(cursor, filter) : eventsQuery(cursor, filter);
+    const rows = this.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.params, 26) as Array<{ detail: string }>;
+    return rows.map((r) => r.detail);
   }
 
   /** The events of a block in the order they were emitted. */

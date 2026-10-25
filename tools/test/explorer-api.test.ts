@@ -424,6 +424,18 @@ describe('extrinsics and events', () => {
     assert.deepEqual(named.items.map((e: EventRow) => e.id), ['9-2', '8-2']);
     assert.equal((await get('/api/events?pallet=a%27%20OR%201%3D1')).status, 400);
   });
+
+  it('refuses a method filter without its pallet, which would read every event', async () => {
+    const r = await get('/api/events?method=NameClaimed');
+    assert.equal(r.status, 400);
+    assert.deepEqual(r.body, { error: 'method_needs_pallet' });
+    assert.equal((await ok('/api/events?pallet=identitee&method=')).items.length > 0, true);
+  });
+
+  it('filters extrinsics by signer and pallet together', async () => {
+    assert.deepEqual((await ok(`/api/extrinsics?signer=${ALICE}&pallet=sudo`)).items.map((x: ExtrinsicRow) => x.id), ['5-1']);
+    assert.deepEqual((await ok(`/api/extrinsics?signer=${BOB}&pallet=sudo`)).items, []);
+  });
 });
 
 describe('accounts', () => {
