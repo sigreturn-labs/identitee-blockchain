@@ -1,0 +1,163 @@
+// Decoding helpers of the explorer indexer: block author from the Aura digest, GRANDPA signers
+// from a justification, and decoded calls and events as plain JSON. Pure functions over codecs
+// built from the runtime metadata, no network.
+
+import {
+  Bool,
+  Bytes,
+  Compact,
+  Enum,
+  GenericAccountId,
+  GenericCall,
+  GenericEvent,
+  GenericExtrinsic,
+  Int,
+  Null,
+  Option,
+  Raw,
+  Result,
+  Struct,
+  Text,
+  UInt,
+} from '@polkadot/types';
+import type { Call, DigestItem, Event, GrandpaJustification } from '@polkadot/types/interfaces';
+import type { Codec, Registry } from '@polkadot/types/types';
+import { u8aToHex } from '@polkadot/util';
+import { encodeAddress } from '@polkadot/util-crypto';
+
+export const SS58_PREFIX = 2426;
+
+/** The slot of the Aura pre-runtime digest item, or null if the header has none. */
+export function auraSlot(digestLogs: DigestItem[]): bigint | null {
+  for (const log of digestLogs) {
+    if (!log.isPreRuntime) continue;
+    const [engine, data] = log.asPreRuntime;
+    if (!engine.isAura || data.length < 8) continue;
+    return new DataView(data.buffer, data.byteOffset, 8).getBigUint64(0, true);
+  }
+  return null;
+}
+
+/** The Aura author of a slot: the authorities take turns. */
+export function auraAuthor(slot: bigint, authorities: string[]): string {
+  return authorities[Number(slot % BigInt(authorities.length))];
+}
+
+/** The ed25519 keys (hex) that signed the precommits of a GRANDPA justification, each once. */
+export function justificationSigners(justification: Uint8Array, registry: Registry): string[] {
+  const decoded = registry.createType<GrandpaJustification>('GrandpaJustification', justification);
+  const keys = decoded.commit.precommits.map((p) => p.id.toHex());
+  return [...new Set(keys)];
+}
+
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
+
+function bytesToJson(u8a: Uint8Array): string {
+  try {
+    return UTF8.decode(u8a);
+  } catch {
+    return u8aToHex(u8a);
+  }
+}
+
+/**
+ * A codec as human JSON: addresses in SS58 2426, integers wider than 32 bits (balances) as
+ * decimal strings, bytes as text when valid UTF-8 and hex otherwise, unit enum variants as their
+ * name, other variants as `{ Variant: value }`, nested calls as `{ pallet, method, args }`.
+ */
+export function toJson(codec: Codec): unknown {
+  if (codec instanceof GenericAccountId) return encodeAddress(codec.toU8a(), SS58_PREFIX);
+  if (codec instanceof GenericCall) {
+    const { pallet, method, args } = walkCall(codec as unknown as Call);
+    return { pallet, method, args };
+  }
+  if (codec instanceof Compact) return toJson(codec.unwrap());
+  if (codec instanceof UInt || codec instanceof Int) return codec.bitLength() > 32 ? codec.toString() : codec.toNumber();
+  if (codec instanceof Bool) return codec.isTrue;
+  if (codec instanceof Null) return null;
+  if (codec instanceof Text) return codec.toString();
+  if (codec instanceof Bytes) return bytesToJson(codec.toU8a(true));
+  if (codec instanceof Raw) return codec.toHex();
+  if (codec instanceof Option) return codec.isSome ? toJson(codec.unwrap()) : null;
+  if (codec instanceof Result) return { [codec.type]: toJson(codec.inner) };
+  if (codec instanceof Enum) {
+    // A MultiAddress that holds an account id reads as the address itself.
+    if (codec.type === 'Id' && codec.inner instanceof GenericAccountId) return toJson(codec.inner);
+    return codec.inner instanceof Null ? codec.type : { [codec.type]: toJson(codec.inner) };
+  }
+  if (codec instanceof Struct) {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of codec.entries()) out[String(key)] = toJson(value);
+    return out;
+  }
+  if (codec instanceof Map) return [...codec.entries()].map(([k, v]) => [toJson(k as Codec), toJson(v as Codec)]);
+  if (Array.isArray(codec) || codec instanceof Set) return [...(codec as Iterable<Codec>)].map(toJson);
+  return codec.toJSON();
+}
+
+export interface WalkedCall {
+  pallet: string;
+  method: string;
+  args: Record<string, unknown>;
+  inner: WalkedCall[];
+}
+
+/** A call with its named arguments as JSON, and every call nested in its arguments, recursively. */
+export function walkCall(call: Call): WalkedCall {
+  const args: Record<string, unknown> = {};
+  const inner: WalkedCall[] = [];
+  // `argsDef` keeps the metadata's names (snake case), `meta.args` has them in camel case.
+  Object.keys(call.argsDef).forEach((name, i) => {
+    const value = call.args[i];
+    args[name] = toJson(value);
+    collectCalls(value, inner);
+  });
+  return { pallet: call.section, method: call.meta.name.toString(), args, inner };
+}
+
+function collectCalls(value: Codec, out: WalkedCall[]): void {
+  if (value instanceof GenericCall) {
+    out.push(walkCall(value as unknown as Call));
+    return;
+  }
+  for (const child of children(value)) collectCalls(child, out);
+}
+
+/** The data of an event by field name (the metadata's names), each as JSON. */
+export function eventData(event: Event): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  event.data.forEach((value, i) => {
+    const name = event.meta.fields[i]?.name.unwrapOr(null)?.toString() ?? String(i);
+    out[name] = toJson(value);
+  });
+  return out;
+}
+
+/** Every address in a call, event or extrinsic (the signer included), SS58 2426, each once. */
+export function accountsIn(value: Codec): string[] {
+  const found = new Set<string>();
+  const visit = (codec: Codec): void => {
+    if (codec instanceof GenericAccountId) {
+      found.add(encodeAddress(codec.toU8a(), SS58_PREFIX));
+      return;
+    }
+    for (const child of children(codec)) visit(child);
+  };
+  visit(value);
+  return [...found];
+}
+
+function children(codec: Codec): Codec[] {
+  if (codec instanceof GenericExtrinsic) {
+    return codec.isSigned ? [codec.signer, codec.method] : [codec.method];
+  }
+  if (codec instanceof GenericEvent) return [...codec.data];
+  if (codec instanceof GenericCall) return [...codec.args];
+  if (codec instanceof Compact) return [];
+  if (codec instanceof Option) return codec.isSome ? [codec.unwrap()] : [];
+  if (codec instanceof Enum) return [codec.inner];
+  if (codec instanceof Struct) return [...codec.values()];
+  if (codec instanceof Map) return [...codec.entries()].flat() as Codec[];
+  if (Array.isArray(codec) || codec instanceof Set) return [...(codec as Iterable<Codec>)];
+  return [];
+}
