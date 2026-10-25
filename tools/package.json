@@ -14,6 +14,8 @@
     "verifier:selftest": "tsx src/verifier-selftest.ts",
     "verifier": "tsx src/verifier/main.ts",
     "verify:native": "tsx src/verifier/native.ts",
+    "explorer": "tsx src/explorer/main.ts",
+    "explorer:selftest": "tsx src/explorer-selftest.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
