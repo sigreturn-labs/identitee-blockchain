@@ -1,15 +1,14 @@
-import type { BlockRow } from "../api.ts";
-import { keyLabel, useLabels } from "../data.ts";
+import type { BlockItem } from "../api.ts";
 import { formatNumber, shortHash } from "../format.ts";
+import { Producer } from "../ui/fields.tsx";
 import { Age, BlockLink, PagedTable, useNow } from "../ui/table.tsx";
 
 export function Blocks() {
   const now = useNow();
-  const labels = useLabels(shortHash);
   return (
     <section class="x-page">
       <h1>Blocks</h1>
-      <PagedTable<BlockRow>
+      <PagedTable<BlockItem>
         path="/api/blocks"
         label="Blocks"
         empty="No blocks yet."
@@ -17,7 +16,7 @@ export function Blocks() {
         columns={[
           { label: "Block", cell: (b) => <BlockLink n={b.number} /> },
           { label: "Age", cell: (b) => <Age ms={b.timestamp} now={now} /> },
-          { label: "Produced by", cell: (b) => (b.author === null ? <span class="x-quiet">Unknown</span> : keyLabel(labels, b.author, shortHash)) },
+          { label: "Produced by", cell: (b) => <Producer author={b.author} label={b.authorLabel} /> },
           { label: "Extrinsics", cell: (b) => formatNumber(b.extrinsicCount), class: "x-end" },
           { label: "Events", cell: (b) => formatNumber(b.eventCount), class: "x-end" },
           {

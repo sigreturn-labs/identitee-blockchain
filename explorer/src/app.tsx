@@ -1,11 +1,18 @@
 import { LocationProvider, Route, Router, useRoute } from "preact-iso";
 import { Account } from "./pages/account.tsx";
+import { Attestations } from "./pages/attestations.tsx";
+import { Authorities } from "./pages/authorities.tsx";
+import { Authority } from "./pages/authority.tsx";
 import { Block } from "./pages/block.tsx";
 import { Blocks } from "./pages/blocks.tsx";
 import { Events } from "./pages/events.tsx";
 import { Extrinsic } from "./pages/extrinsic.tsx";
 import { Extrinsics } from "./pages/extrinsics.tsx";
 import { Home } from "./pages/home.tsx";
+import { Migrations } from "./pages/migrations.tsx";
+import { Network } from "./pages/network.tsx";
+import { Runtime } from "./pages/runtime.tsx";
+import { Usernames } from "./pages/usernames.tsx";
 import { Layout } from "./ui/layout.tsx";
 
 // Placeholder pages until each page is written: the title of the page and the id it was given.
@@ -29,13 +36,13 @@ const ROUTES: Array<[path: string, component: () => preact.JSX.Element]> = [
   ["/extrinsic/:id", Extrinsic],
   ["/events", Events],
   ["/account/:address", Account],
-  ["/authorities", page("Authorities")],
-  ["/authority/:id", page("Authority", "id")],
-  ["/attestations", page("Attestations")],
-  ["/migrations", page("Migrations")],
-  ["/usernames", page("Usernames")],
-  ["/runtime", page("Runtime")],
-  ["/network", page("Network")],
+  ["/authorities", Authorities],
+  ["/authority/:id", Authority],
+  ["/attestations", Attestations],
+  ["/migrations", Migrations],
+  ["/usernames", Usernames],
+  ["/runtime", Runtime],
+  ["/network", Network],
   ["/search", page("Search")],
 ];
 

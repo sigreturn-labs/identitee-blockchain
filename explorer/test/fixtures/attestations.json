@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "who": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+      "authorityId": 0,
+      "kind": "attested",
+      "target": {
+        "Field": "email"
+      },
+      "data": {
+        "verdict": "Verified"
+      },
+      "block": 1235,
+      "eventId": "1235-1",
+      "sentence": "Email attested for idrfve…YX3ogk by identitee",
+      "timestamp": 1761407410000
+    },
+    {
+      "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+      "authorityId": 0,
+      "kind": "requested",
+      "target": {
+        "Fact": "unique_person"
+      },
+      "data": null,
+      "block": 1230,
+      "eventId": "1230-1",
+      "sentence": "idq6mN…dHGiUc asked identitee to record unique person",
+      "timestamp": 1761407380000
+    },
+    {
+      "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+      "authorityId": 0,
+      "kind": "revoked",
+      "target": {
+        "Field": "x"
+      },
+      "data": {
+        "reason": "expired"
+      },
+      "block": 1201,
+      "eventId": "1201-2",
+      "sentence": null,
+      "timestamp": 1761407206000
+    }
+  ],
+  "next": "1201-2"
+}

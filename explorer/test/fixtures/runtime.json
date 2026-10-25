@@ -1,0 +1,129 @@
+{
+  "current": {
+    "specName": "identitee",
+    "specVersion": 3
+  },
+  "versions": [
+    {
+      "specVersion": 1,
+      "fromBlock": 0,
+      "specName": "identitee"
+    },
+    {
+      "specVersion": 2,
+      "fromBlock": 410,
+      "specName": "identitee"
+    },
+    {
+      "specVersion": 3,
+      "fromBlock": 980,
+      "specName": "identitee"
+    }
+  ],
+  "pallets": [
+    {
+      "name": "System",
+      "index": 0,
+      "calls": [
+        {
+          "name": "remark",
+          "docs": "Make some on-chain remark."
+        }
+      ],
+      "events": [
+        {
+          "name": "ExtrinsicSuccess",
+          "docs": "An extrinsic completed successfully."
+        }
+      ],
+      "errors": [],
+      "storage": [
+        {
+          "name": "Account",
+          "docs": "The full account information for a particular account ID."
+        }
+      ],
+      "constants": [
+        {
+          "name": "BlockHashCount",
+          "docs": "Maximum number of block number to block hash mappings to keep (oldest pruned first)."
+        }
+      ]
+    },
+    {
+      "name": "Balances",
+      "index": 5,
+      "calls": [
+        {
+          "name": "transfer_keep_alive",
+          "docs": "Same as the transfer call, but with a check that the transfer will not kill the\norigin account."
+        }
+      ],
+      "events": [
+        {
+          "name": "Transfer",
+          "docs": "Transfer succeeded."
+        }
+      ],
+      "errors": [
+        {
+          "name": "InsufficientBalance",
+          "docs": "Balance too low to send value."
+        }
+      ],
+      "storage": [],
+      "constants": [
+        {
+          "name": "ExistentialDeposit",
+          "docs": "The minimum amount required to keep an account open."
+        }
+      ]
+    },
+    {
+      "name": "Identitee",
+      "index": 8,
+      "calls": [
+        {
+          "name": "claim_name",
+          "docs": "Claim a free name for the caller.\nThe deposit is reserved until the name is released."
+        },
+        {
+          "name": "set_field",
+          "docs": "Set a public field of the caller's identity."
+        },
+        {
+          "name": "request_attestation",
+          "docs": "Ask an authority to attest a field or record a fact."
+        }
+      ],
+      "events": [
+        {
+          "name": "NameClaimed",
+          "docs": "A name was claimed."
+        },
+        {
+          "name": "FieldAttested",
+          "docs": "An authority attested a field."
+        }
+      ],
+      "errors": [
+        {
+          "name": "NameTaken",
+          "docs": "The name is held by another account."
+        }
+      ],
+      "storage": [
+        {
+          "name": "Names",
+          "docs": "Owner of each name."
+        }
+      ],
+      "constants": [
+        {
+          "name": "NameDeposit",
+          "docs": "Deposit reserved for a name."
+        }
+      ]
+    }
+  ]
+}

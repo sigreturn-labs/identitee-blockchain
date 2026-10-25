@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { BlockRow, EventRow, ExtrinsicSummary, Page, Stats, Ts } from "../api.ts";
-import { keyLabel, useApi, useHead, useLabels } from "../data.ts";
-import { formatNumber, shortHash } from "../format.ts";
+import type { BlockItem, EventRow, ExtrinsicSummary, Page, Stats, Ts } from "../api.ts";
+import { useApi, useHead } from "../data.ts";
+import { formatNumber } from "../format.ts";
+import { Producer } from "../ui/fields.tsx";
 import { AccountLink, Age, BlockLink, CallName, Empty, ErrorCard, Section, Skeleton, Table, useNow } from "../ui/table.tsx";
 
 /** A number that moves when the indexed head does, after the first one: the lists are read again
@@ -30,13 +31,12 @@ export function Home() {
   const head = useHead();
   const version = useIndexVersion(head?.indexed);
   const now = useNow();
-  const labels = useLabels(shortHash);
   const stats = useApi<Stats>("/api/stats", version);
-  const blocks = useApi<Page<BlockRow, number>>("/api/blocks?limit=10", version);
+  const blocks = useApi<Page<BlockItem, number>>("/api/blocks?limit=10", version);
   // the latest signed ones: most blocks hold only the timestamp inherent
-  const extrinsics = useApi<Page<ExtrinsicSummary & Ts>>("/api/extrinsics?limit=100", version);
+  const extrinsics = useApi<Page<ExtrinsicSummary & Ts>>("/api/extrinsics?signed=1&limit=10", version);
   const events = useApi<Page<EventRow & Ts>>("/api/events?pallet=identitee&limit=10", version);
-  const signed = extrinsics.data?.items.filter((x) => x.signer !== null).slice(0, 10) ?? null;
+  const signed = extrinsics.data?.items ?? null;
 
   return (
     <section class="x-page">
@@ -84,7 +84,7 @@ export function Home() {
                   columns={[
                     { label: "Block", cell: (b) => <BlockLink n={b.number} /> },
                     { label: "Age", cell: (b) => <Age ms={b.timestamp} now={now} /> },
-                    { label: "Produced by", cell: (b) => (b.author === null ? <span class="x-quiet">Unknown</span> : keyLabel(labels, b.author, shortHash)) },
+                    { label: "Produced by", cell: (b) => <Producer author={b.author} label={b.authorLabel} /> },
                     { label: "Extrinsics", cell: (b) => formatNumber(b.extrinsicCount), class: "x-end" },
                   ]}
                 />
@@ -105,7 +105,7 @@ export function Home() {
                   columns={[
                     { label: "Extrinsic", cell: (x) => <a href={`/extrinsic/${x.id}`}>{x.id}</a> },
                     { label: "Call", cell: (x) => <CallName pallet={x.pallet} method={x.method} inner={x.inner} /> },
-                    { label: "Signer", cell: (x) => <AccountLink address={x.signer!} /> },
+                    { label: "Signer", cell: (x) => (x.signer === null ? <span class="x-quiet">Unsigned</span> : <AccountLink address={x.signer} />) },
                     { label: "Result", cell: (x) => (x.success ? "Success" : "Failed") },
                   ]}
                 />

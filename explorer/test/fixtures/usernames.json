@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "name": "bob",
+      "who": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+      "kind": "assigned",
+      "block": 1237,
+      "eventId": "1237-1",
+      "sentence": "Name bob assigned to idq6mN…dHGiUc",
+      "timestamp": 1761407422000
+    },
+    {
+      "name": "admin",
+      "who": null,
+      "kind": "reserved",
+      "block": 1100,
+      "eventId": "1100-1",
+      "sentence": "Name admin reserved",
+      "timestamp": 1761406600000
+    },
+    {
+      "name": "alice",
+      "who": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+      "kind": "claimed",
+      "block": 1050,
+      "eventId": "1050-1",
+      "sentence": "Name alice claimed by idrfve…YX3ogk",
+      "timestamp": 1761406300000
+    }
+  ],
+  "next": null
+}

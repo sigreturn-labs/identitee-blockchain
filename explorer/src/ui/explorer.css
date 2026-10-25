@@ -486,6 +486,136 @@
   box-shadow: inset 0 -1px 0 var(--ink);
 }
 
+/* Identity feeds: the title, and the links between the three feeds */
+.x-feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+.x-subnav {
+  display: flex;
+  gap: 18px;
+}
+.x-main .x-subnav a {
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+  padding-block: 10px;
+}
+.x-main .x-subnav a:hover {
+  color: var(--ink);
+}
+.x-main .x-subnav a[aria-current="page"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+}
+
+/* Network: a short key with its Copy, which does not make the row taller */
+.x-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.x-key .icon-button.copy {
+  margin-block: -12px;
+  width: 36px;
+  height: 36px;
+}
+
+/* Runtime: pallets folded to a ruled line, opened to their items and docs */
+.x-pallets {
+  border-bottom: 1px solid var(--line);
+}
+.x-pallet {
+  border-top: 1px solid var(--line);
+}
+.x-pallet summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+}
+.x-pallet summary::-webkit-details-marker {
+  display: none;
+}
+.x-pallet summary::before {
+  content: "";
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-right: 1px solid var(--ink-3);
+  border-bottom: 1px solid var(--ink-3);
+  transform: rotate(-45deg);
+  transition: transform 160ms ease-out;
+}
+.x-pallet[open] summary::before {
+  transform: rotate(45deg);
+}
+.x-pallet summary:hover .x-pallet-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.x-pallet summary:focus-visible {
+  outline: 2px solid var(--ink-2);
+  outline-offset: 2px;
+}
+.x-pallet-name {
+  font-weight: 500;
+}
+.x-pallet summary .x-quiet {
+  font-size: 12px;
+}
+.x-pallet-body {
+  display: grid;
+  gap: 20px;
+  padding: 0 0 22px 18px;
+}
+.x-pallet-body > p {
+  margin: 0;
+  font-size: 12px;
+}
+.x-items h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.x-items dl {
+  margin: 0;
+  display: grid;
+}
+.x-items dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 240px) minmax(0, 1fr);
+  gap: 4px 20px;
+  align-items: baseline;
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.x-items dt {
+  overflow-wrap: anywhere;
+}
+.x-items dd {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+  white-space: pre-line;
+  max-width: 68ch;
+  overflow-wrap: anywhere;
+}
+
 /* Footer */
 .x-foot {
   display: flex;
@@ -554,6 +684,12 @@
   .x-feed li {
     flex-direction: column;
   }
+  .x-items dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .x-pallet-body {
+    padding-left: 0;
+  }
   .x-heads dd {
     font-size: 18px;
   }
@@ -573,5 +709,10 @@
   }
   .x-height {
     min-height: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .x-pallet summary::before {
+    transition: none;
   }
 }

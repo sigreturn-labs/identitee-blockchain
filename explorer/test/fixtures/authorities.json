@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": 0,
+      "name": "identitee",
+      "active": true,
+      "agents": [
+        {
+          "address": "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk",
+          "capabilities": 3,
+          "capabilityNames": [
+            "attest_fields",
+            "person_facts"
+          ]
+        },
+        {
+          "address": "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc",
+          "capabilities": 12,
+          "capabilityNames": [
+            "manage_names",
+            "migrate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "example.com",
+      "active": false,
+      "agents": []
+    }
+  ]
+}

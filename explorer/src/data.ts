@@ -1,6 +1,6 @@
-// Data hooks of the pages: one read, a paged list, the live head and the validator labels.
+// Data hooks of the pages: one read, a paged list and the live head.
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { ApiError, get, live, type Head, type Network, type Page, type Status } from "./api.ts";
+import { ApiError, get, live, type Head, type Page, type Status } from "./api.ts";
 
 const asError = (e: unknown): ApiError => (e instanceof ApiError ? e : new ApiError(0, "network"));
 
@@ -103,24 +103,4 @@ export function useHead(): Head | null {
     };
   }, []);
   return head;
-}
-
-export type Labels = {
-  /** Lowercase hex key to label, Aura and GRANDPA keys alike. */
-  byKey: Map<string, string>;
-  /** The GRANDPA set the node is on, and its members' labels (short keys when unlabelled). */
-  setId: number | null;
-  grandpa: string[];
-};
-
-/** The short form of a key: its label when the API knows one. */
-export const keyLabel = (labels: Labels, key: string, short: (k: string) => string): string => labels.byKey.get(key.toLowerCase()) ?? short(key);
-
-/** Labels of the validators, from /api/network. Empty when the node is away: keys are then shown. */
-export function useLabels(short: (k: string) => string): Labels {
-  const { data } = useApi<Network>("/api/network");
-  const byKey = new Map<string, string>();
-  if (data === null || !Array.isArray(data.validators?.aura) || !Array.isArray(data.validators.grandpa)) return { byKey, setId: null, grandpa: [] };
-  for (const v of [...data.validators.aura, ...data.validators.grandpa]) if (v.label !== null) byKey.set(v.key.toLowerCase(), v.label);
-  return { byKey, setId: data.validators.setId, grandpa: data.validators.grandpa.map((v) => v.label ?? short(v.key)) };
 }

@@ -7,7 +7,7 @@ import type { TrustLevel } from "@web/chain/identity.ts";
 import { shortAddress } from "../address.ts";
 import type { Account as AccountData, HistoryItem, Transfer } from "../api.ts";
 import { useApi } from "../data.ts";
-import { formatIdt, formatNumber } from "../format.ts";
+import { capabilityLabel, formatIdt, formatNumber } from "../format.ts";
 import { AccountLink, Age, BlockLink, CallName, ErrorCard, PagedTable, Skeleton, useNow } from "../ui/table.tsx";
 import { Row } from "../ui/fields.tsx";
 import { EventText } from "./events.tsx";
@@ -18,7 +18,7 @@ function Roles({ roles }: { roles: NonNullable<AccountData["roles"]> }) {
   const list = [
     ...(roles.sudo ? ["Sudo"] : []),
     ...(roles.validator ? ["Validator"] : []),
-    ...roles.agent.map((a) => `Agent of ${a.name ?? `authority #${a.authority}`}${a.capabilityNames.length ? ` (${a.capabilityNames.join(", ")})` : ""}`),
+    ...roles.agent.map((a) => `Agent of ${a.name ?? `authority #${a.authority}`}${a.capabilityNames.length ? ` (${a.capabilityNames.map(capabilityLabel).join(", ")})` : ""}`),
   ];
   if (list.length === 0) return <span class="x-quiet">None</span>;
   return (

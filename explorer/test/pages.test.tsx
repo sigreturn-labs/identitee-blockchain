@@ -5,6 +5,7 @@ import { App } from "../src/app.tsx";
 import { Value } from "../src/ui/value.tsx";
 import { LocationProvider } from "preact-iso";
 import { FakeEventSource } from "./support/no-network.ts";
+import { PENDING, failing, serve, waitFor } from "./support/serve.ts";
 import account from "./fixtures/account.json";
 import block from "./fixtures/block.json";
 import blocks from "./fixtures/blocks.json";
@@ -23,35 +24,9 @@ const ALICE = "idrfveZjd2r16HCn9iKmEPnXTxdxqB3LRWGVXc7oKs9YX3ogk";
 const BOB = "idq6mNVZUu81C8CHeHPoHeScVrnwwiVw61SMCYkfeoAdHGiUc";
 const ALICE_ED = "0x88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee";
 
-const waitFor = <T,>(check: () => T): Promise<T> => vi.waitFor(check, { timeout: 2_000, interval: 10 });
-
-type Answer = unknown | { status: number; body: unknown };
-/** An answer that never comes. */
-const PENDING = Symbol("pending");
-const failing = (status: number, error: string) => ({ status, body: { error } });
-
-/** Answers the API by path: `/api/blocks?limit=10` first, then `/api/blocks`. Anything else is a
- * 404, and PENDING never answers. Returns the requested paths. */
-function serve(routes: Record<string, Answer>): string[] {
-  const asked: string[] = [];
-  globalThis.fetch = vi.fn((input: string) => {
-    const url = new URL(input);
-    const path = `${url.pathname}${url.search}`;
-    asked.push(path);
-    const found = path in routes ? routes[path] : routes[url.pathname];
-    if (found === PENDING) return new Promise<Response>(() => {});
-    const { status, body } =
-      found === undefined
-        ? failing(404, "not_found")
-        : typeof found === "object" && found !== null && "status" in found && "body" in found
-          ? (found as { status: number; body: unknown })
-          : { status: 200, body: found };
-    return Promise.resolve(new Response(JSON.stringify(body), { status }));
-  }) as unknown as typeof fetch;
-  return asked;
-}
-
 const COMMON = { "/api/status": status, "/api/network": network };
+const signedOnly = { ...extrinsics, items: extrinsics.items.filter((x) => x.signer !== null) };
+const BOB_ED = "0xd17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69";
 
 let root: HTMLElement;
 beforeEach(() => {
@@ -79,7 +54,7 @@ describe("Home", () => {
       ...COMMON,
       "/api/stats": stats,
       "/api/blocks": blocks,
-      "/api/extrinsics": extrinsics,
+      "/api/extrinsics?signed=1&limit=10": signedOnly,
       "/api/events": events,
     });
     open("/");
@@ -90,14 +65,17 @@ describe("Home", () => {
     expect(text()).toContain("Accounts");
     expect(asked).toContain("/api/blocks?limit=10");
     expect(asked).toContain("/api/events?pallet=identitee&limit=10");
-    // only signed extrinsics: the timestamp inherent is left out
+    // the API leaves the unsigned inherents out
+    expect(asked).toContain("/api/extrinsics?signed=1&limit=10");
+    // the producer's label comes with the block
+    expect(asked).not.toContain("/api/network");
     const xts = main().querySelector('[aria-label="Latest extrinsics"]')!;
     await waitFor(() => expect(xts.textContent).toContain("identitee.claim_name"));
     expect(xts.textContent).not.toContain("timestamp.set");
     expectClean();
 
     const next = { ...blocks, items: [{ ...blocks.items[0]!, number: 1241 }, ...blocks.items] };
-    serve({ ...COMMON, "/api/stats": stats, "/api/blocks": next, "/api/extrinsics": extrinsics, "/api/events": events });
+    serve({ ...COMMON, "/api/stats": stats, "/api/blocks": next, "/api/extrinsics": signedOnly, "/api/events": events });
     FakeEventSource.instances.at(-1)!.emit("head", '{"best":1241,"finalized":1238,"indexed":1241}');
     await waitFor(() => expect(latest.textContent).toContain("1,241"));
     await waitFor(() => expect(main().querySelector('[aria-label="Heads"]')?.textContent).toContain("1,238"));
@@ -128,7 +106,7 @@ describe("Home", () => {
 
 describe("Block", () => {
   it("shows its fields, who produced it and the GRANDPA set that finalized it", async () => {
-    serve({ ...COMMON, "/api/block/1236": block });
+    const asked = serve({ "/api/status": status, "/api/block/1236": block });
     open("/block/1236");
     await waitFor(() => expect(root.querySelector("h1")?.textContent).toBe("Block 1,236"));
     await waitFor(() => expect(row("Produced by")).toBe("identitee-01"));
@@ -138,25 +116,48 @@ describe("Block", () => {
     expect(main().querySelector('[aria-label="Events"]')?.textContent).toContain("1 IDT sent from");
     expect(main().querySelector('a[rel="prev"]')?.getAttribute("href")).toBe("/block/1235");
     expect(main().querySelector('a[rel="next"]')?.getAttribute("href")).toBe("/block/1237");
+    const logs = main().querySelector('[aria-label="Digest logs"]')!;
+    expect(logs.textContent).toContain("PreRuntime");
+    expect(logs.textContent).toContain("Seal");
+    expect(logs.textContent).toContain("aura");
+    expect(logs.textContent).toContain("0x2a5c8d1100000000");
+    expect(asked).not.toContain("/api/network");
+    expectClean();
+  });
+
+  it("says the digest logs are not available while the node is unreachable", async () => {
+    serve({ "/api/status": status, "/api/block/1236": { ...block, logs: null } });
+    open("/block/1236");
+    await waitFor(() => expect(main().querySelector('[aria-label="Digest logs"]')?.textContent).toContain("Not available while the node is unreachable"));
     expectClean();
   });
 
   it("names the GRANDPA signers when the block carries a justification", async () => {
-    serve({ ...COMMON, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    const signers = [
+      { key: ALICE_ED, label: "identitee-01" },
+      { key: BOB_ED, label: "identitee-02" },
+    ];
+    serve({ "/api/status": status, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED, BOB_ED], signers } });
     open("/block/1024");
-    await waitFor(() => expect(text()).toContain("Signed by identitee-01"));
+    await waitFor(() => expect(row("Finalized by")).toBe("Signed by identitee-01, identitee-02"));
     expect(text()).not.toContain("GRANDPA authority set");
   });
 
   it("falls back to short keys when the labels are unknown", async () => {
-    serve({ "/api/status": status, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    serve({ "/api/status": status, "/api/block/1024": { ...block, number: 1024, authorLabel: null, justificationSigners: [ALICE_ED], signers: [{ key: ALICE_ED, label: null }] } });
     open("/block/1024");
     await waitFor(() => expect(text()).toContain("Signed by 0x88dc34…a6b0ee"));
-    expect(text()).toContain("0xd43593…6da27d");
+    expect(row("Produced by")).toBe("0xd43593…6da27d");
+  });
+
+  it("names only the set id when the members of the set are not known", async () => {
+    serve({ "/api/status": status, "/api/block/1236": { ...block, authoritySet: { id: 4, members: null }, authoritySetId: 4 } });
+    open("/block/1236");
+    await waitFor(() => expect(row("Finalized by")).toBe("GRANDPA authority set #4"));
   });
 
   it("says Unknown for the finality until the finalized head is known", async () => {
-    serve({ "/api/status": PENDING, "/api/network": network, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    serve({ "/api/status": PENDING, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED], signers: [{ key: ALICE_ED, label: "identitee-01" }] } });
     open("/block/1024");
     await waitFor(() => expect(row("Produced by")).toBe("identitee-01"));
     expect(row("Finalized by")).toBe("Unknown");
@@ -278,9 +279,11 @@ describe("Account", () => {
 
 describe("Lists", () => {
   it("pages the blocks with Load more", async () => {
-    serve({ ...COMMON, "/api/blocks?limit=25": blocks, "/api/blocks?limit=25&cursor=1237": { items: [{ ...blocks.items[2]!, number: 1237 }], next: null } });
+    const asked = serve({ "/api/status": status, "/api/blocks?limit=25": blocks, "/api/blocks?limit=25&cursor=1237": { items: [{ ...blocks.items[2]!, number: 1237, authorLabel: null }], next: null } });
     open("/blocks");
     await waitFor(() => expect(text()).toContain("1,238"));
+    expect(text()).toContain("identitee-01");
+    expect(asked).not.toContain("/api/network");
     [...main().querySelectorAll("button")].find((b) => b.textContent === "Load more")!.click();
     await waitFor(() => expect(text()).toContain("1,237"));
     expectClean();

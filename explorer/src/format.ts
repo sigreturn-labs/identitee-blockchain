@@ -35,3 +35,9 @@ export const formatNumber = (n: number): string => group(String(n));
 
 /** `2026-10-25 13:46:40 UTC` */
 export const formatTime = (ms: number): string => `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
+
+/** `Attest fields` for the capability name `attest_fields`. */
+export const capabilityLabel = (name: string): string => {
+  const words = name.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};

@@ -153,7 +153,20 @@ export type Call = { pallet: string; method: string; args: unknown };
 export type EventRow = { id: string; block: number; index: number; extrinsicIndex: number | null; pallet: string; method: string; data: unknown; sentence: string | null };
 export type ExtrinsicFull = Omit<ExtrinsicSummary, "inner"> & { args: unknown } & Ts & { events: Array<EventRow & Ts> };
 
-export type BlockDetail = BlockRow & { extrinsics: Array<ExtrinsicSummary & Ts>; events: Array<EventRow & Ts> };
+/** A list row of /api/blocks: the producer's label comes from the explorer's label file. */
+export type BlockItem = BlockRow & { authorLabel: string | null };
+export type LabelledKey = { key: string; label: string | null };
+export type DigestLog = { type: string; engine: string | null; data: string };
+export type BlockDetail = BlockItem & {
+  /** The GRANDPA signers of its justification, null without one. */
+  signers: LabelledKey[] | null;
+  /** The set in charge at that block; `members` is null when the node cannot read them. */
+  authoritySet: { id: number; members: LabelledKey[] | null };
+  /** Null when the node is unreachable. */
+  logs: DigestLog[] | null;
+  extrinsics: Array<ExtrinsicSummary & Ts>;
+  events: Array<EventRow & Ts>;
+};
 export type ExtrinsicMatches = { matches: Array<ExtrinsicSummary & Ts> };
 
 export type Transfer = { from: string; to: string; amount: string; block: number; extrinsicId: string | null; eventId: string; sentence: string | null } & Ts;

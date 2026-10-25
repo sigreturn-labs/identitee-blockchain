@@ -1,8 +1,8 @@
 import { useRoute } from "preact-iso";
 import type { BlockDetail } from "../api.ts";
-import { keyLabel, useApi, useHead, useLabels } from "../data.ts";
-import { formatNumber, formatTime, shortHash } from "../format.ts";
-import { blockTitle, finalizedBy, Row } from "../ui/fields.tsx";
+import { useApi, useHead } from "../data.ts";
+import { formatNumber, formatTime } from "../format.ts";
+import { blockTitle, finalizedBy, Producer, Row } from "../ui/fields.tsx";
 import { Age, Empty, ErrorCard, Section, Skeleton, Table, useNow } from "../ui/table.tsx";
 import { eventColumns } from "./events.tsx";
 import { extrinsicColumns } from "./extrinsics.tsx";
@@ -12,7 +12,6 @@ export function Block() {
   const id = params.id ?? "";
   const { data, error, reload } = useApi<BlockDetail>(`/api/block/${encodeURIComponent(id)}`);
   const head = useHead();
-  const labels = useLabels(shortHash);
   const now = useNow();
   // unknown until the head is read, and while the node is away (the API then answers 0): the row
   // says so rather than naming signers of a block that may not be final
@@ -42,9 +41,11 @@ export function Block() {
               )}
             </Row>
             <Row label="Time">{data.timestamp === null ? <span class="x-quiet">Genesis</span> : <>{formatTime(data.timestamp)} <span class="x-quiet">(<Age ms={data.timestamp} now={now} />)</span></>}</Row>
-            <Row label="Produced by">{data.author === null ? <span class="x-quiet">Unknown</span> : keyLabel(labels, data.author, shortHash)}</Row>
+            <Row label="Produced by">
+              <Producer author={data.author} label={data.authorLabel} />
+            </Row>
             <Row label="Finalized by">
-              {finalized === null ? <span class="x-quiet">Unknown</span> : data.number > finalized ? <span class="x-pending">Not finalized yet</span> : finalizedBy(data, labels)}
+              {finalized === null ? <span class="x-quiet">Unknown</span> : data.number > finalized ? <span class="x-pending">Not finalized yet</span> : finalizedBy(data)}
             </Row>
             <Row label="State root">
               <span class="x-hash">{data.stateRoot}</span>
@@ -75,6 +76,25 @@ export function Block() {
           </Section>
           <Section title={`Events (${formatNumber(data.events.length)})`} label="Events">
             {data.events.length === 0 ? <Empty>No events in this block.</Empty> : <Table label="Events of the block" rows={data.events} rowKey={(e) => e.id} columns={eventColumns(now, false)} />}
+          </Section>
+          <Section title="Digest logs">
+            {data.logs === null ? (
+              <Empty>Not available while the node is unreachable.</Empty>
+            ) : data.logs.length === 0 ? (
+              <Empty>No digest logs in this block.</Empty>
+            ) : (
+              <Table
+                label="Digest logs of the block"
+                rows={data.logs.map((log, index) => ({ ...log, index }))}
+                rowKey={(l) => String(l.index)}
+                columns={[
+                  { label: "Log", cell: (l) => l.index },
+                  { label: "Type", cell: (l) => l.type },
+                  { label: "Engine", cell: (l) => (l.engine === null ? <span class="x-quiet">None</span> : l.engine) },
+                  { label: "Data", cell: (l) => <span class="x-hash">{l.data}</span>, class: "x-wide" },
+                ]}
+              />
+            )}
           </Section>
         </>
       )}
