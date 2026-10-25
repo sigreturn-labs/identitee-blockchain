@@ -9,10 +9,10 @@ import type { Account as AccountData, HistoryItem, Transfer } from "../api.ts";
 import { useApi } from "../data.ts";
 import { formatIdt, formatNumber } from "../format.ts";
 import { AccountLink, Age, BlockLink, CallName, ErrorCard, PagedTable, Skeleton, useNow } from "../ui/table.tsx";
-import { Row } from "./block.tsx";
+import { Row } from "../ui/fields.tsx";
 import { EventText } from "./events.tsx";
 
-const isTrust = (t: string | null): t is TrustLevel => t !== null && t in LEVEL_LABELS;
+const isTrust = (t: string | null): t is TrustLevel => t !== null && Object.hasOwn(LEVEL_LABELS, t);
 
 function Roles({ roles }: { roles: NonNullable<AccountData["roles"]> }) {
   const list = [

@@ -26,10 +26,12 @@ const ALICE_ED = "0x88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6
 const waitFor = <T,>(check: () => T): Promise<T> => vi.waitFor(check, { timeout: 2_000, interval: 10 });
 
 type Answer = unknown | { status: number; body: unknown };
+/** An answer that never comes. */
+const PENDING = Symbol("pending");
 const failing = (status: number, error: string) => ({ status, body: { error } });
 
 /** Answers the API by path: `/api/blocks?limit=10` first, then `/api/blocks`. Anything else is a
- * 404. Returns the requested paths. */
+ * 404, and PENDING never answers. Returns the requested paths. */
 function serve(routes: Record<string, Answer>): string[] {
   const asked: string[] = [];
   globalThis.fetch = vi.fn((input: string) => {
@@ -37,6 +39,7 @@ function serve(routes: Record<string, Answer>): string[] {
     const path = `${url.pathname}${url.search}`;
     asked.push(path);
     const found = path in routes ? routes[path] : routes[url.pathname];
+    if (found === PENDING) return new Promise<Response>(() => {});
     const { status, body } =
       found === undefined
         ? failing(404, "not_found")
@@ -67,6 +70,7 @@ function open(path: string) {
 
 const main = () => root.querySelector("main")!;
 const text = () => main().textContent ?? "";
+const row = (label: string) => [...main().querySelectorAll(".x-fields .row")].find((r) => r.querySelector("dt")?.textContent === label)?.querySelector("dd")?.textContent;
 const expectClean = () => expect(root.textContent).not.toMatch(/[·—]/);
 
 describe("Home", () => {
@@ -99,6 +103,22 @@ describe("Home", () => {
     await waitFor(() => expect(main().querySelector('[aria-label="Heads"]')?.textContent).toContain("1,238"));
   });
 
+  it("shows the heads the API does not know while the node is down as unknown", async () => {
+    const down = { ...status, best: 0, finalized: 0, node: "down" };
+    serve({ "/api/status": down, "/api/stats": { ...stats, authorities: null }, "/api/blocks": blocks, "/api/extrinsics": extrinsics, "/api/events": events });
+    open("/");
+    const heads = await waitFor(() => {
+      const h = main().querySelector('[aria-label="Heads"]');
+      expect(h?.textContent).toContain("Indexed1,240");
+      return h!;
+    });
+    expect(heads.textContent).toContain("BestUnknown");
+    expect(heads.textContent).toContain("FinalizedUnknown");
+    expect(heads.querySelector('a[href="/block/0"]')).toBeNull();
+    expect(root.querySelector(".x-height a")).toBeNull();
+    expectClean();
+  });
+
   it("shows an error card when the API is down", async () => {
     open("/");
     await waitFor(() => expect(text()).toContain("The explorer API is not answering"));
@@ -111,7 +131,6 @@ describe("Block", () => {
     serve({ ...COMMON, "/api/block/1236": block });
     open("/block/1236");
     await waitFor(() => expect(root.querySelector("h1")?.textContent).toBe("Block 1,236"));
-    const row = (label: string) => [...main().querySelectorAll(".x-fields .row")].find((r) => r.querySelector("dt")?.textContent === label)?.querySelector("dd")?.textContent;
     await waitFor(() => expect(row("Produced by")).toBe("identitee-01"));
     await waitFor(() => expect(row("Finalized by")).toBe("GRANDPA authority set #0: identitee-01"));
     expect(row("Hash")).toContain(block.hash);
@@ -134,6 +153,23 @@ describe("Block", () => {
     open("/block/1024");
     await waitFor(() => expect(text()).toContain("Signed by 0x88dc34…a6b0ee"));
     expect(text()).toContain("0xd43593…6da27d");
+  });
+
+  it("says Unknown for the finality until the finalized head is known", async () => {
+    serve({ "/api/status": PENDING, "/api/network": network, "/api/block/1024": { ...block, number: 1024, justificationSigners: [ALICE_ED] } });
+    open("/block/1024");
+    await waitFor(() => expect(row("Produced by")).toBe("identitee-01"));
+    expect(row("Finalized by")).toBe("Unknown");
+    expect(text()).not.toContain("Signed by");
+  });
+
+  it("says Unknown for the finality while the node is down", async () => {
+    serve({ "/api/status": { ...status, best: 0, finalized: 0, node: "down" }, "/api/block/1236": block });
+    open("/block/1236");
+    await waitFor(() => expect(row("Hash")).toContain(block.hash));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(row("Finalized by")).toBe("Unknown");
+    expect(text()).not.toContain("GRANDPA authority set");
   });
 
   it("marks a block above the finalized head", async () => {

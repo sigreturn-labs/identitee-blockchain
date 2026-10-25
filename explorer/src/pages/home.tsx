@@ -48,14 +48,15 @@ export function Home() {
           <dl class="x-heads" aria-label="Heads">
             {(
               [
-                ["Best", head?.best],
-                ["Finalized", head?.finalized],
-                ["Indexed", head?.indexed],
+                // the API answers 0 for both heads while the node is away
+                ["Best", head?.best || null],
+                ["Finalized", head?.finalized || null],
+                ["Indexed", head?.indexed ?? null],
               ] as const
             ).map(([label, n]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>{n === undefined || n === null ? <span class="bone x-bone-num" aria-hidden="true" /> : <BlockLink n={n} />}</dd>
+                <dd>{head === null ? <span class="bone x-bone-num" aria-hidden="true" /> : n === null ? <span class="x-quiet">Unknown</span> : <BlockLink n={n} />}</dd>
               </div>
             ))}
           </dl>

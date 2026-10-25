@@ -4,7 +4,7 @@ import { useApi } from "../data.ts";
 import { formatIdt, formatNumber, formatTime, shortHash } from "../format.ts";
 import { AccountLink, Age, BlockLink, Empty, ErrorCard, Section, Skeleton, Table, useNow } from "../ui/table.tsx";
 import { CallView } from "../ui/value.tsx";
-import { Row } from "./block.tsx";
+import { Row } from "../ui/fields.tsx";
 import { eventColumns } from "./events.tsx";
 import { extrinsicColumns } from "./extrinsics.tsx";
 

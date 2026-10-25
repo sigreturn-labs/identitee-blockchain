@@ -93,4 +93,16 @@ describe("live", () => {
     stop();
     vi.restoreAllMocks();
   });
+
+  it("passes a head to every listener even when one throws", () => {
+    const heads: unknown[] = [];
+    const stopA = live(() => {
+      throw new Error("broken listener");
+    });
+    const stopB = live((head) => heads.push(head));
+    FakeEventSource.instances[0]!.emit("head", '{"best":5,"finalized":3,"indexed":5}');
+    expect(heads).toEqual([{ best: 5, finalized: 3, indexed: 5 }]);
+    stopA();
+    stopB();
+  });
 });

@@ -55,7 +55,13 @@ function openStream(): () => void {
       }
       wait = 1_000;
       lastHead = head;
-      for (const listener of [...listeners]) listener(head);
+      for (const listener of [...listeners]) {
+        try {
+          listener(head);
+        } catch {
+          // one failing listener does not keep the head from the others
+        }
+      }
     });
     source.onerror = () => {
       source?.close();
