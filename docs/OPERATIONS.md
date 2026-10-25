@@ -9,7 +9,7 @@ TLS. Commands run on the server as a user with `sudo`, unless they say otherwise
 
 ```
 client --wss/https--> nginx :443 --> identitee-node 127.0.0.1:9944   (--rpc-methods safe)
-                        |               p2p 127.0.0.1:30333, Prometheus 127.0.0.1:9615
+                        |               p2p 0.0.0.0:30333, Prometheus 127.0.0.1:9615
                         |               /var/lib/identitee (archive node)
                         |
                         +--https--> identitee-verifier 127.0.0.1:8787
@@ -175,6 +175,22 @@ sudo journalctl -u identitee-node -f       # "Imported #n", "finalized #n" advan
   ```
 
 - `--port` and `--listen-addr` are mutually exclusive.
+- P2P is public: `sudo ufw allow 30333/tcp`. The node is the testnet bootnode, at
+  `/dns/rpc.identit.ee/tcp/30333/p2p/<PeerId>`; print the PeerId with
+  `identitee-node key inspect-node-key --file /var/lib/identitee/node-key`.
+
+### Running a full node
+
+Anyone can sync the testnet. Build `identitee-node` from the commit deployed on the testnet, then:
+
+```bash
+identitee-node --chain deploy/chainspec/identitee-testnet-raw.json \
+  --base-path ./identitee-data --name <your-node-name> \
+  --bootnodes /dns/rpc.identit.ee/tcp/30333/p2p/12D3KooWDdpoKG1W5B8da4DSwTQ1WpbSBLG67V1czucqRwFnqbpz
+```
+
+A full node does not produce or finalize blocks. The validator set is fixed in the genesis (there is
+no session pallet), so adding a validator takes a new genesis or a runtime upgrade.
 
 ## nginx and TLS
 
