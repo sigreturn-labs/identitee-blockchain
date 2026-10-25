@@ -343,9 +343,10 @@ export class ExplorerApi {
 
   // --- Heads ---
 
-  private headState(): { best: number; finalized: number; indexed: number | null } {
-    const h = this.headSource?.heads() ?? { best: 0, finalized: 0 };
-    return { best: h.best, finalized: h.finalized, indexed: this.store.lastIndexed() };
+  /** The node's heads are only known while it is reachable: the last ones seen are not reported as current. */
+  private headState(): { best: number | null; finalized: number | null; indexed: number | null } {
+    const h = this.live.connected() ? this.headSource?.heads() : undefined;
+    return { best: h?.best ?? null, finalized: h?.finalized ?? null, indexed: this.store.lastIndexed() };
   }
 
   private broadcast(): void {

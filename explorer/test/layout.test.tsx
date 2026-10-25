@@ -58,12 +58,19 @@ describe("Layout", () => {
   });
 
   it("shows no height while the node is down or nothing is finalized", async () => {
-    status({ best: 0, finalized: 0, indexed: 12, node: "down", specVersion: 1, genesis: null });
+    status({ best: null, finalized: null, indexed: 12, node: "down", specVersion: 1, genesis: null });
     open("/");
     await waitFor(() => expect(root.querySelector("h1")).not.toBeNull());
     await new Promise((r) => setTimeout(r, 20));
     expect(root.querySelector(".x-height a")).toBeNull();
     FakeEventSource.instances[0]!.emit("head", '{"best":0,"finalized":0,"indexed":12}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(root.querySelector(".x-height a")).toBeNull();
+    FakeEventSource.instances[0]!.emit("head", '{"best":14,"finalized":13,"indexed":14}');
+    await waitFor(() => expect(root.querySelector(".x-height a")?.textContent).toBe("13"));
+    // the node goes away again: the height it last gave is not kept as if it were current
+    FakeEventSource.instances[0]!.emit("head", '{"best":null,"finalized":null,"indexed":14}');
+    await waitFor(() => expect(root.querySelector(".x-height a")).toBeNull());
     await new Promise((r) => setTimeout(r, 20));
     expect(root.querySelector(".x-height a")).toBeNull();
     FakeEventSource.instances[0]!.emit("head", '{"best":14,"finalized":13,"indexed":14}');

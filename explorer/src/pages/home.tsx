@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { BlockItem, EventRow, ExtrinsicSummary, Page, Stats, Ts } from "../api.ts";
+import { knownHeight, type BlockItem, type EventRow, type ExtrinsicSummary, type Page, type Stats, type Ts } from "../api.ts";
 import { useApi, useHead } from "../data.ts";
 import { formatNumber } from "../format.ts";
 import { Producer } from "../ui/fields.tsx";
@@ -48,9 +48,9 @@ export function Home() {
           <dl class="x-heads" aria-label="Heads">
             {(
               [
-                // the API answers 0 for both heads while the node is away
-                ["Best", head?.best || null],
-                ["Finalized", head?.finalized || null],
+                // the API answers null for both heads while the node is away
+                ["Best", knownHeight(head?.best)],
+                ["Finalized", knownHeight(head?.finalized)],
                 ["Indexed", head?.indexed ?? null],
               ] as const
             ).map(([label, n]) => (

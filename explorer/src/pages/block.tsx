@@ -1,5 +1,5 @@
 import { useRoute } from "preact-iso";
-import type { BlockDetail } from "../api.ts";
+import { knownHeight, type BlockDetail } from "../api.ts";
 import { useApi, useHead } from "../data.ts";
 import { formatNumber, formatTime } from "../format.ts";
 import { blockTitle, finalizedBy, Producer, Row } from "../ui/fields.tsx";
@@ -13,10 +13,10 @@ export function Block() {
   const { data, error, reload } = useApi<BlockDetail>(`/api/block/${encodeURIComponent(id)}`);
   const head = useHead();
   const now = useNow();
-  // unknown until the head is read, and while the node is away (the API then answers 0): the row
+  // unknown until the head is read, and while the node is away (the API then answers null): the row
   // says so rather than naming signers of a block that may not be final
-  const finalized = head !== null && head.finalized > 0 ? head.finalized : null;
-  const top = head === null ? null : (head.indexed ?? head.best);
+  const finalized = knownHeight(head?.finalized);
+  const top = head === null ? null : (head.indexed ?? knownHeight(head.best));
 
   return (
     <section class="x-page">

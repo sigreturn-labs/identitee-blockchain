@@ -31,7 +31,11 @@ export async function get<T>(path: string): Promise<T> {
   return body as T;
 }
 
-export type Head = { best: number; finalized: number; indexed: number | null };
+/** `best` and `finalized` are null while the node is unreachable (older APIs said 0): see `knownHeight`. */
+export type Head = { best: number | null; finalized: number | null; indexed: number | null };
+
+/** A head height the node vouches for, or null: null and 0 (no head yet, or the node away) are unknown. */
+export const knownHeight = (n: number | null | undefined): number | null => (typeof n === "number" && n > 0 ? n : null);
 
 // One stream per tab, however many components listen: it opens with the first listener and
 // closes with the last.
@@ -105,7 +109,7 @@ export function live(onHead: (head: Head) => void): () => void {
 export type Ts = { timestamp: number | null };
 export type Page<T, C = string> = { items: T[]; next: C | null };
 
-export type Status = { best: number; finalized: number; indexed: number | null; node: "up" | "down"; specVersion: number | null; genesis: string | null };
+export type Status = { best: number | null; finalized: number | null; indexed: number | null; node: "up" | "down"; specVersion: number | null; genesis: string | null };
 export type Stats = {
   blocks: number;
   extrinsics: number;

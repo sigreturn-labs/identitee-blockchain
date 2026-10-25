@@ -183,6 +183,17 @@ describe('status and stats', () => {
     assert.deepEqual(await ok('/api/status'), { best: LAST + 2, finalized: LAST, indexed: LAST, node: 'up', specVersion: 2, genesis: GENESIS });
   });
 
+  it('has unknown heads before the node was ever reached', async () => {
+    const offline = new ExplorerApi({ store, origins: [], log: quiet });
+    const port = await offline.listen(0, '127.0.0.1');
+    try {
+      const st = (await (await fetch(`http://127.0.0.1:${port}/api/status`)).json()) as Record<string, unknown>;
+      assert.deepEqual([st.best, st.finalized, st.indexed, st.node], [null, null, LAST, 'down']);
+    } finally {
+      await offline.close();
+    }
+  });
+
   it('gives the counts and the number of authorities', async () => {
     const s = await ok('/api/stats');
     assert.equal(s.blocks, LAST + 1);
@@ -640,6 +651,15 @@ describe('live', () => {
     await until((t) => t.includes(`"best":${LAST + 5}`));
     assert.match(text, new RegExp(`event: head\\ndata: \\{"best":${LAST + 5},"finalized":${LAST + 3},"indexed":${LAST}\\}\\n\\n`));
     await until((t) => t.includes(': ping'));
+    // the node goes away: the next check of the stream sends unknown heads, the index stays
+    live.up = false;
+    try {
+      await until((t) => t.includes('"best":null'));
+      assert.match(text, new RegExp(`event: head\\ndata: \\{"best":null,"finalized":null,"indexed":${LAST}\\}\\n\\n`));
+    } finally {
+      live.up = true;
+    }
+    await until((t) => t.split('event: head').length > 4);
     controller.abort();
     heads.fire({ best: LAST + 2, finalized: LAST });
   });
@@ -680,6 +700,9 @@ describe('node down', () => {
     try {
       const s = await ok('/api/status');
       assert.equal(s.node, 'down');
+      assert.equal(s.best, null, 'the last heads seen are not the node\'s current ones');
+      assert.equal(s.finalized, null);
+      assert.equal(s.indexed, LAST);
       assert.equal(s.specVersion, 2);
       assert.equal((await ok('/api/blocks')).items.length, 25);
       assert.equal((await ok('/api/block/3')).number, 3);

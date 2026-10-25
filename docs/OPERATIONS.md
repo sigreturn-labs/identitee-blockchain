@@ -444,7 +444,8 @@ Logs are one JSON object per line (`journalctl -u identitee-explorer -o cat`). S
 | `request_failed` | An API request ended in an internal error (the client gets a 500) |
 
 A node restart does not need an explorer restart: polkadot.js reconnects, and `/api/status` says
-`"node": "down"` meanwhile, while the indexed data keeps being served. The routes that need live state
+`"node": "down"` meanwhile, with `best` and `finalized` null (unknown) and `indexed` as it was, while
+the indexed data keeps being served. The routes that need live state
 answer 503 `node_down` (authorities, network), or leave balance, identity and roles null (account),
 until it is back.
 

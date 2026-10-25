@@ -1,7 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useLocation } from "preact-iso";
 import { useEffect, useState } from "preact/hooks";
-import { get, live, PROFILE_BASE, type Status } from "../api.ts";
+import { get, knownHeight, live, PROFILE_BASE, type Status } from "../api.ts";
 import { formatNumber } from "../format.ts";
 import { Search } from "./search.tsx";
 
@@ -21,16 +21,19 @@ export const SECTIONS: Array<[label: string, path: string, detail?: string]> = [
 const isCurrent = (path: string, section: string, detail?: string): boolean => path === section || (detail !== undefined && path.startsWith(detail));
 
 /** The finalized height: read once, then followed on the live stream. Null until known, and while
- * the node is away (the API then reports 0). */
+ * the node is away (the API then reports null). */
 function useFinalized(): number | null {
   const [finalized, setFinalized] = useState<number | null>(null);
   useEffect(() => {
     let gone = false;
     get<Status>("/api/status").then(
-      (s) => !gone && s.node === "up" && s.finalized > 0 && setFinalized((f) => Math.max(f ?? 0, s.finalized)),
+      (s) => {
+        const known = knownHeight(s.finalized);
+        if (!gone && s.node === "up" && known !== null) setFinalized((f) => Math.max(f ?? 0, known));
+      },
       () => {},
     );
-    const stop = live((head) => setFinalized(head.finalized > 0 ? head.finalized : null));
+    const stop = live((head) => setFinalized(knownHeight(head.finalized)));
     return () => {
       gone = true;
       stop();

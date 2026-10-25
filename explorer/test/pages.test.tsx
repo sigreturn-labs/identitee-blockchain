@@ -82,7 +82,7 @@ describe("Home", () => {
   });
 
   it("shows the heads the API does not know while the node is down as unknown", async () => {
-    const down = { ...status, best: 0, finalized: 0, node: "down" };
+    const down = { ...status, best: null, finalized: null, node: "down" };
     serve({ "/api/status": down, "/api/stats": { ...stats, authorities: null }, "/api/blocks": blocks, "/api/extrinsics": extrinsics, "/api/events": events });
     open("/");
     const heads = await waitFor(() => {
@@ -95,6 +95,20 @@ describe("Home", () => {
     expect(heads.querySelector('a[href="/block/0"]')).toBeNull();
     expect(root.querySelector(".x-height a")).toBeNull();
     expectClean();
+  });
+
+  it("turns known heads back to unknown when the stream says the node went away", async () => {
+    serve({ ...COMMON, "/api/stats": stats, "/api/blocks": blocks, "/api/extrinsics": extrinsics, "/api/events": events });
+    open("/");
+    const heads = await waitFor(() => {
+      const h = main().querySelector('[aria-label="Heads"]');
+      expect(h?.textContent).toContain("Finalized1,236");
+      return h!;
+    });
+    FakeEventSource.instances.at(-1)!.emit("head", '{"best":null,"finalized":null,"indexed":1240}');
+    await waitFor(() => expect(heads.textContent).toContain("FinalizedUnknown"));
+    expect(heads.textContent).toContain("BestUnknown");
+    expect(heads.textContent).toContain("Indexed1,240");
   });
 
   it("shows an error card when the API is down", async () => {
@@ -165,7 +179,7 @@ describe("Block", () => {
   });
 
   it("says Unknown for the finality while the node is down", async () => {
-    serve({ "/api/status": { ...status, best: 0, finalized: 0, node: "down" }, "/api/block/1236": block });
+    serve({ "/api/status": { ...status, best: null, finalized: null, node: "down" }, "/api/block/1236": block });
     open("/block/1236");
     await waitFor(() => expect(row("Hash")).toContain(block.hash));
     await new Promise((r) => setTimeout(r, 20));
