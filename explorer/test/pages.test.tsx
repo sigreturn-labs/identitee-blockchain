@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/app.tsx";
@@ -80,6 +82,23 @@ describe("Home", () => {
     FakeEventSource.instances.at(-1)!.emit("head", '{"best":1241,"finalized":1238,"indexed":1241}');
     await waitFor(() => expect(latest.textContent).toContain("1,241"));
     await waitFor(() => expect(main().querySelector('[aria-label="Heads"]')?.textContent).toContain("1,238"));
+  });
+
+  it("keeps each side-by-side section at its natural height, top-aligned", async () => {
+    serve({ ...COMMON, "/api/stats": stats, "/api/blocks": blocks, "/api/extrinsics?signed=1&limit=10": signedOnly, "/api/events": events });
+    const style = document.createElement("style");
+    style.textContent = readFileSync(join(import.meta.dirname, "../src/ui/explorer.css"), "utf8");
+    document.head.append(style);
+    try {
+      open("/");
+      const split = await waitFor(() => main().querySelector(".x-split")!);
+      expect(split.querySelectorAll(".x-section").length).toBe(2);
+      // a short table next to a long one must not be stretched to its height, nor its rows spread
+      expect(getComputedStyle(split).alignItems).toBe("start");
+      expect(getComputedStyle(split.querySelector(".x-section")!).alignContent).toBe("start");
+    } finally {
+      style.remove();
+    }
   });
 
   it("shows the heads the API does not know while the node is down as unknown", async () => {
