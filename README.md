@@ -83,6 +83,15 @@ flowchart LR
 | Token | `IDT`, 12 decimals |
 | Polkadot SDK | `polkadot-stable2606-3` |
 
+### Address format
+
+identitee uses SS58 prefix **2426** for the identitee network. Every address starts with `id` (the
+third character depends on the key). Wallets and libraries read the prefix from the chain's
+`ss58Format` property, so no extra configuration is needed. The SS58 registry
+([paritytech/ss58-registry](https://github.com/paritytech/ss58-registry)) has been read-only since
+April 2026; at the time it was archived, prefix 2426 was not assigned to any network. This repository
+is the reference for identitee's use of it.
+
 ## Build and test
 
 Prerequisites: the Rust toolchain pinned in `rust-toolchain.toml` (installed by `rustup` on first

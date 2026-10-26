@@ -49,7 +49,7 @@ that sign with their own agent keys.
 | Parameter | Value |
 |---|---|
 | Block time | 6 s (Aura), finality by GRANDPA |
-| SS58 prefix | 2426 (addresses start with `id`); not yet in the SS58 registry |
+| SS58 prefix | 2426 (addresses start with `id`), declared in the chain spec's `ss58Format` |
 | Token | `IDT`, 12 decimals |
 | Privileged origin | `Root` through `pallet-sudo` (`AuthorityOrigin = EnsureRoot`) |
 | Quota window | 1 day (14,400 blocks) |
@@ -335,4 +335,4 @@ These hold on the current testnet and are open before a public launch:
   guessed from its commitment.
 - A refused migration leaves no state on chain, only the `MigrationRejected` event.
 - `kill_identity` requires an identity, so facts about an account without one cannot be purged.
-- SS58 prefix 2426 is not registered; genesis presets write keys in hexadecimal for that reason.
+- SS58 prefix 2426 is outside the SS58 registry (read-only since April 2026), so `AccountId32` serde rejects it: genesis presets write keys in hexadecimal for that reason.
