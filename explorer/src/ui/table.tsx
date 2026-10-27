@@ -4,10 +4,15 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { Avatar } from "@web/ui/avatar.tsx";
+import { LEVEL_LABELS, LevelBadge } from "@web/ui/level.tsx";
+import type { TrustLevel } from "@web/chain/identity.ts";
 import { shortAddress, publicKeyOf } from "../address.ts";
 import type { ApiError } from "../api.ts";
 import { type Paged, usePaged } from "../data.ts";
 import { ago, formatNumber } from "../format.ts";
+import { useIdentity } from "../identities.ts";
+
+export const isTrust = (t: string | null): t is TrustLevel => t !== null && Object.hasOwn(LEVEL_LABELS, t);
 
 export type Column<T> = { label: string; cell: (row: T) => ComponentChildren; class?: string };
 
@@ -129,9 +134,28 @@ export const Age = ({ ms, now }: { ms: number | null; now: number }) =>
 
 export const BlockLink = ({ n }: { n: number }) => <a href={`/block/${n}`}>{formatNumber(n)}</a>;
 
-/** An account: its generated avatar and the edges of its address, linking to its page. */
+/** A display name that could pass for an address once shown. Allowlist after NFKC: letters, marks,
+ * digits, single spaces and `' - & ,` only, and no long base58 run. */
+export const looksLikeAddress = (name: string): boolean => {
+  const folded = name.normalize("NFKC");
+  return !/^[\p{L}\p{M}\p{N}'&,-]+( [\p{L}\p{M}\p{N}'&,-]+)*$/u.test(folded) || /[1-9A-HJ-NP-Za-km-z]{16,}/.test(folded);
+};
+
+/** What a link calls an account: its username, which is unique and needs a verified field, else its
+ * display name, which anyone may set, unless that name could pass for an address. */
+export function accountName(identity: { display: string | null; username: string | null } | null | undefined): string | null {
+  if (identity?.username) return identity.username;
+  const display = identity?.display ?? null;
+  return display !== null && display.trim() !== "" && !looksLikeAddress(display) ? display : null;
+}
+
+/** An account: its generated avatar, then who it is when it says so (its name, with the edges of
+ * the address in brackets and the trust badge), else the edges of the address, linking to its page. */
 export function AccountLink({ address }: { address: string }) {
   const key = publicKeyOf(address);
+  const identity = useIdentity(address);
+  const name = accountName(identity);
+  const trust = identity?.trust ?? null;
   return (
     <a class="x-account" href={`/account/${address}`} title={address}>
       {key !== null && (
@@ -139,7 +163,15 @@ export function AccountLink({ address }: { address: string }) {
           <Avatar publicKey={key} size={18} />
         </span>
       )}
-      <span>{shortAddress(address)}</span>
+      {name === null ? (
+        <span>{shortAddress(address)}</span>
+      ) : (
+        <>
+          <span class="x-account-name">{name}</span>
+          <span class="x-account-addr">({shortAddress(address, 4)})</span>
+        </>
+      )}
+      {trust !== null && isTrust(trust) && <LevelBadge trust={trust} />}
     </a>
   );
 }

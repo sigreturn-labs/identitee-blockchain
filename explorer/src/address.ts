@@ -42,4 +42,5 @@ export function publicKeyOf(address: string): string | null {
 export const isAddress = (value: string): boolean => publicKeyOf(value) !== null;
 
 /** `idrfve…YX3ogk`: the edges of an address, the full one belongs in a `title`. */
-export const shortAddress = (address: string): string => (address.length <= 16 ? address : `${address.slice(0, 6)}…${address.slice(-6)}`);
+export const shortAddress = (address: string, edge = 6): string =>
+  address.length <= 2 * edge + 4 ? address : `${address.slice(0, edge)}…${address.slice(-edge)}`;

@@ -3,16 +3,14 @@ import { useState } from "preact/hooks";
 import { Avatar } from "@web/ui/avatar.tsx";
 import { CopyButton } from "@web/ui/copy.tsx";
 import { LEVEL_LABELS, LevelBadge } from "@web/ui/level.tsx";
-import type { TrustLevel } from "@web/chain/identity.ts";
 import { shortAddress } from "../address.ts";
 import type { Account as AccountData, HistoryItem, Transfer } from "../api.ts";
 import { useApi } from "../data.ts";
 import { capabilityLabel, formatIdt, formatNumber } from "../format.ts";
-import { AccountLink, Age, BlockLink, CallName, ErrorCard, PagedTable, Skeleton, useNow } from "../ui/table.tsx";
+import { AccountLink, Age, isTrust, BlockLink, CallName, ErrorCard, PagedTable, Skeleton, useNow } from "../ui/table.tsx";
 import { Row } from "../ui/fields.tsx";
 import { EventText } from "./events.tsx";
 
-const isTrust = (t: string | null): t is TrustLevel => t !== null && Object.hasOwn(LEVEL_LABELS, t);
 
 function Roles({ roles }: { roles: NonNullable<AccountData["roles"]> }) {
   const list = [

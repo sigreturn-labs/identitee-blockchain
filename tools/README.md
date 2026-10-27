@@ -348,6 +348,7 @@ extrinsics that are final are sent with `Cache-Control: public, max-age=300`, th
 | `/api/extrinsics` | `signer`, `pallet`, `signed=1` | extrinsics, newest first |
 | `/api/extrinsic/<hash or block-index>` | | the decoded call, signer, nonce, tip, fee, result and events |
 | `/api/events` | `pallet`, `method` | events, newest first, with a sentence for those the explorer explains (every identitee event) |
+| `/api/identities` | `a` | display name, username and trust level of up to 50 comma-separated addresses, keyed as given |
 | `/api/account/<address or hex key>` | | balance, nonce, identity summary, roles, profile link |
 | `/api/account/<address>/history` | | its extrinsics and events |
 | `/api/account/<address>/transfers` | | its transfers |

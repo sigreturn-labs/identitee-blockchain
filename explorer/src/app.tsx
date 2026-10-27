@@ -5,6 +5,7 @@ import { Authorities } from "./pages/authorities.tsx";
 import { Authority } from "./pages/authority.tsx";
 import { Block } from "./pages/block.tsx";
 import { Blocks } from "./pages/blocks.tsx";
+import { Docs } from "./pages/docs.tsx";
 import { Events } from "./pages/events.tsx";
 import { Extrinsic } from "./pages/extrinsic.tsx";
 import { Extrinsics } from "./pages/extrinsics.tsx";
@@ -43,6 +44,7 @@ const ROUTES: Array<[path: string, component: () => preact.JSX.Element]> = [
   ["/usernames", Usernames],
   ["/runtime", Runtime],
   ["/network", Network],
+  ["/docs", Docs],
   ["/search", page("Search")],
 ];
 

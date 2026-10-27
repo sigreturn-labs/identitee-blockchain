@@ -13,7 +13,7 @@ export function extrinsicColumns(now: number, withBlock = true): Column<Extrinsi
       : []),
     { label: "Call", cell: (x) => <CallName pallet={x.pallet} method={x.method} inner={x.inner} /> },
     { label: "Signer", cell: (x) => (x.signer === null ? <span class="x-quiet">Unsigned</span> : <AccountLink address={x.signer} />) },
-    { label: "Result", cell: (x) => (x.success ? "Success" : <span class="x-failed">Failed</span>) },
+    { label: "Result", cell: (x) => (x.success ? "Success" : <span class="x-failed">Failed</span>), class: "x-nowrap" },
   ];
 }
 

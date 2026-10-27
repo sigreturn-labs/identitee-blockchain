@@ -469,6 +469,23 @@ describe('accounts', () => {
     assert.equal((await ok(`/api/account/${BOB}`)).profileUrl, `https://identit.ee/a/${BOB}`);
   });
 
+  it('gives the identity summary of several addresses, keyed as asked', async () => {
+    assert.deepEqual(await ok(`/api/identities?a=${ALICE},${BOB},${ALICE_GENERIC},${ALICE}`), {
+      items: {
+        [ALICE]: { display: 'Alice', username: 'alice', trust: 'Unknown' },
+        [BOB]: { display: null, username: 'me', trust: 'Unknown' },
+        [ALICE_GENERIC]: { display: 'Alice', username: 'alice', trust: 'Unknown' },
+      },
+    });
+  });
+
+  it('refuses an empty, oversized or invalid list of identities', async () => {
+    assert.deepEqual((await get('/api/identities')).body, { error: 'bad_a' });
+    const many = Array.from({ length: 51 }, (_, i) => encodeAddress(new Uint8Array(32).fill(i + 1), 2426)).join(',');
+    assert.deepEqual((await get(`/api/identities?a=${many}`)).body, { error: 'bad_a' });
+    assert.deepEqual((await get(`/api/identities?a=${ALICE},nobody`)).body, { error: 'bad_address' });
+  });
+
   it('refuses an invalid address', async () => {
     for (const a of ['nobody', `${ALICE.slice(0, -1)}x`, '0x1234']) assert.deepEqual((await get(`/api/account/${a}`)).body, { error: 'bad_address' });
   });

@@ -16,6 +16,7 @@ export const SECTIONS: Array<[label: string, path: string, detail?: string]> = [
   ["Attestations", "/attestations"],
   ["Runtime", "/runtime"],
   ["Network", "/network"],
+  ["Docs", "/docs"],
 ];
 
 const isCurrent = (path: string, section: string, detail?: string): boolean => path === section || (detail !== undefined && path.startsWith(detail));

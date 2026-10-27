@@ -86,7 +86,7 @@ describe("Layout", () => {
   it("registers every page, with its id", async () => {
     expect(ROUTE_PATHS).toEqual([
       "/", "/blocks", "/block/:id", "/extrinsics", "/extrinsic/:id", "/events", "/account/:address", "/authorities",
-      "/authority/:id", "/attestations", "/migrations", "/usernames", "/runtime", "/network", "/search",
+      "/authority/:id", "/attestations", "/migrations", "/usernames", "/runtime", "/network", "/docs", "/search",
     ]);
     open("/block/12");
     await waitFor(() => expect(root.querySelector("h1")?.textContent).toBe("Block 12"));

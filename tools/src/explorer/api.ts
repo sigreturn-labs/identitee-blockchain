@@ -484,6 +484,7 @@ export class ExplorerApi {
       [/^\/api\/extrinsics$/, (_p, q) => this.page(s.extrinsics(cursorOf(q), limitOf(q), { signer: optAddress(q, 'signer'), pallet: optIdent(q, 'pallet'), signed: optFlag(q, 'signed') }), summarize)],
       [/^\/api\/extrinsic\/([^/]+)$/, ([id]) => this.extrinsic(id!), true],
       [/^\/api\/events$/, (_p, q) => this.page(s.events(cursorOf(q), limitOf(q), eventFilter(q)))],
+      [/^\/api\/identities$/, (_p, q) => this.identities(q)],
       [/^\/api\/account\/([^/]+)$/, ([a]) => this.account(a!)],
       [/^\/api\/account\/([^/]+)\/history$/, ([a], q) => this.history(address(a!), q)],
       [/^\/api\/account\/([^/]+)\/transfers$/, ([a], q) => this.page(s.transfers(address(a!), cursorOf(q), limitOf(q)))],
@@ -584,6 +585,16 @@ export class ExplorerApi {
       profileUrl: profileUrl(identity?.username ?? null, addr),
       node: this.live.connected() ? 'up' : 'down',
     };
+  }
+
+  /** The identity summary of each address of `a` (comma separated, at most 50): what a link to an
+   * account shows beside the address. An address the node cannot answer for maps to null. */
+  private async identities(q: URLSearchParams): Promise<unknown> {
+    const list = [...new Set((q.get('a') ?? '').split(',').filter((v) => v !== ''))];
+    if (list.length === 0 || list.length > MAX_IDENTITIES) throw new ApiError(400, 'bad_a');
+    const addrs = list.map(address);
+    const summaries = await Promise.all(addrs.map((a) => this.orNull((l) => l.identitySummary(a))));
+    return { items: Object.fromEntries(list.map((input, i) => [input, summaries[i]])) };
   }
 
   private history(addr: string, q: URLSearchParams): unknown {
@@ -691,6 +702,8 @@ function blockId(id: string): number | string {
   if (HASH.test(lower)) return lower;
   throw new ApiError(400, 'bad_id');
 }
+
+const MAX_IDENTITIES = 50;
 
 function address(input: string): string {
   const addr = normalizeAddress(input);

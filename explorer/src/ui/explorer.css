@@ -283,6 +283,13 @@
 .x-table td.x-wide {
   width: 50%;
 }
+/* ids and short words keep their line next to a wide account */
+.x-table td.x-nowrap,
+.x-table td a[href^="/extrinsic/"],
+.x-table td a[href^="/block/"] {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .x-account {
   display: inline-flex;
   align-items: center;
@@ -292,6 +299,35 @@
 }
 .x-account-avatar {
   display: inline-flex;
+}
+.x-main a.x-account {
+  text-decoration: none;
+}
+.x-main a.x-account .x-account-name,
+.x-main a.x-account > span:not([class]) {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+.x-main a.x-account:hover .x-account-name,
+.x-main a.x-account:hover > span:not([class]) {
+  text-decoration-color: var(--ink);
+}
+.x-account-name {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* room for the underline, which overflow would otherwise clip */
+  padding-bottom: 4px;
+  margin-bottom: -4px;
+}
+.x-account-addr {
+  color: var(--ink-3);
+}
+.x-account .badge {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
 .x-callname {
   display: inline-flex;
@@ -723,4 +759,65 @@
   .x-pallet summary::before {
     transition: none;
   }
+}
+
+/* Docs: prose with tables and calls, at reading width */
+.x-docs {
+  max-width: 880px;
+}
+.x-doc {
+  gap: 14px;
+}
+.x-doc p,
+.x-doc ul {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.x-doc strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+.x-doc ul {
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+.x-docs h2 {
+  scroll-margin-top: 16px;
+}
+.x-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 13px;
+}
+.x-code {
+  font: inherit;
+  font-size: 0.93em;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 1px 6px;
+  overflow-wrap: anywhere;
+}
+.x-pre {
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-row);
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.x-scroll {
+  overflow-x: auto;
+}
+.x-doc-table td:first-child {
+  white-space: nowrap;
 }

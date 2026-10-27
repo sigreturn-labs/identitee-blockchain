@@ -107,7 +107,7 @@ export function Home() {
                     { label: "Extrinsic", cell: (x) => <a href={`/extrinsic/${x.id}`}>{x.id}</a> },
                     { label: "Call", cell: (x) => <CallName pallet={x.pallet} method={x.method} inner={x.inner} /> },
                     { label: "Signer", cell: (x) => (x.signer === null ? <span class="x-quiet">Unsigned</span> : <AccountLink address={x.signer} />) },
-                    { label: "Result", cell: (x) => (x.success ? "Success" : "Failed") },
+                    { label: "Result", cell: (x) => (x.success ? "Success" : "Failed"), class: "x-nowrap" },
                   ]}
                 />
               )}
