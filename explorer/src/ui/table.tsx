@@ -141,12 +141,15 @@ export const looksLikeAddress = (name: string): boolean => {
   return !/^[\p{L}\p{M}\p{N}'&,-]+( [\p{L}\p{M}\p{N}'&,-]+)*$/u.test(folded) || /[1-9A-HJ-NP-Za-km-z]{16,}/.test(folded);
 };
 
-/** What a link calls an account: its username, which is unique and needs a verified field, else its
- * display name, which anyone may set, unless that name could pass for an address. */
+/** What a link calls an account: `@` and its username, which is unique and needs a verified field,
+ * else its display name, which anyone may set, unless that name could pass for an address. A display
+ * name cannot hold `@`, so it never passes for a username. */
 export function accountName(identity: { display: string | null; username: string | null } | null | undefined): string | null {
-  if (identity?.username) return identity.username;
+  if (identity?.username) return `@${identity.username}`;
   const display = identity?.display ?? null;
-  return display !== null && display.trim() !== "" && !looksLikeAddress(display) ? display : null;
+  // shown as checked: the NFKC form, so a look-alike character never reaches the page
+  const folded = display?.normalize("NFKC") ?? null;
+  return folded !== null && folded.trim() !== "" && !looksLikeAddress(folded) ? folded : null;
 }
 
 /** An account: its generated avatar, then who it is when it says so (its name, with the edges of

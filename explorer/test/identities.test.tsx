@@ -42,9 +42,9 @@ describe("Account links", () => {
     );
     const links = () => [...root.querySelectorAll("a.x-account")];
     const shown = (a: Element) => `${a.querySelector(".x-account-name")?.textContent} ${a.querySelector(".x-account-addr")?.textContent}`;
-    await waitFor(() => expect(shown(links()[0]!)).toBe("alice (idrf…3ogk)"));
+    await waitFor(() => expect(shown(links()[0]!)).toBe("@alice (idrf…3ogk)"));
     expect(links()[0]!.querySelector("svg.badge")?.getAttribute("aria-label")).toBe("Fully Verified");
-    expect(shown(links()[1]!)).toBe("bob (idq6…GiUc)");
+    expect(shown(links()[1]!)).toBe("@bob (idq6…GiUc)");
     expect(links()[1]!.querySelector("svg.badge")).toBeNull();
     expect(asked).toEqual([`/api/identities?a=${ALICE},${BOB}`]);
   });
@@ -59,7 +59,10 @@ describe("Account links", () => {
 
 describe("Account names", () => {
   it("prefer the username, then a display name that cannot pass for an address", () => {
-    expect(accountName({ display: "Alice", username: "alice" })).toBe("alice");
+    expect(accountName({ display: "Alice", username: "alice" })).toBe("@alice");
+    expect(accountName({ display: "@alice", username: null })).toBeNull();
+    expect(accountName({ display: "\uff20alice", username: null })).toBeNull();
+    expect(accountName({ display: "\u24d0lice", username: null })).toBe("alice");
     expect(accountName({ display: "Alice", username: null })).toBe("Alice");
     expect(accountName({ display: "idsY…VC7q", username: null })).toBeNull();
     expect(accountName({ display: "idsYn8...R8VC7q", username: null })).toBeNull();
