@@ -55,6 +55,7 @@ const CONTENTS: Array<[id: string, title: string]> = [
   ["facts", "Facts about a person"],
   ["names", "Usernames"],
   ["people", "Calls for everyone"],
+  ["validators", "Validators"],
   ["reading", "Reading the result"],
 ];
 
@@ -281,6 +282,38 @@ export function Docs() {
             ["acceptSub", "parent", "Accepts a proposal."],
             ["requestMigration", "source", "Brings an identity over from the Polkadot or Kusama People Chain, once."],
             ["clearIdentity", "", "Deletes the identity. Facts recorded by authorities stay."],
+          ]}
+        />
+      </Part>
+
+      <Part id="validators" title="Validators">
+        <p>
+          Validators produce and finalize the blocks. Each is an account with two session keys held by its node: an Aura key (sr25519) and a
+          GRANDPA key (ed25519). The set is managed by root and changes at session boundaries, every 10 minutes: a validator added or removed
+          takes part, or stops, at the start of the session after next, so within 20 minutes. The <a href="/network">Network</a> page shows the
+          current set.
+        </p>
+        <p>
+          <strong>Adding a validator.</strong> Its operator runs a node with <C>--validator</C>, generates the keys with <C>author_rotateKeys</C> on
+          that node's own RPC, and sends the account address and the two public keys. Then:
+        </p>
+        <pre class="x-pre">{"sudo(validators.addValidator(<address>, { aura: <0x aura key>, grandpa: <0x grandpa key> }))"}</pre>
+        <p>
+          The account needs no tokens and no proof: root vouches for the keys. GRANDPA needs more than two thirds of the validators online to
+          finalize, so with two validators both must be up; blocks keep coming without them, finality waits.
+        </p>
+        <Calls
+          label="Validator set calls"
+          rows={[
+            ["addValidator", "who, keys", "Adds the account with its Aura and GRANDPA keys. A key already registered to another account is refused."],
+            ["removeValidator", "who", "Removes the account from the set. The last validator cannot be removed."],
+          ]}
+        />
+        <Calls
+          label="Calls of a validator"
+          rows={[
+            ["session.setKeys", "keys, proof", "Rotates the validator's own keys; the proof comes from author_rotateKeysWithOwner on its node."],
+            ["session.purgeKeys", "", "Clears its keys; it stops validating from the session after next."],
           ]}
         />
       </Part>

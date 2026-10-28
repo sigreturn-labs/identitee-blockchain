@@ -32,10 +32,12 @@ pallet-aura = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-identitee = { workspace = true }
+pallet-session = { workspace = true }
 pallet-skip-feeless-payment = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
+pallet-validators = { workspace = true }
 
 # primitives
 sp-api = { workspace = true }
@@ -87,11 +89,13 @@ std = [
 	"pallet-balances/std",
 	"pallet-grandpa/std",
 	"pallet-identitee/std",
+	"pallet-session/std",
 	"pallet-skip-feeless-payment/std",
 	"pallet-sudo/std",
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
+	"pallet-validators/std",
 	"scale-info/std",
 	"serde_json/std",
 	"sp-api/std",
@@ -118,10 +122,12 @@ runtime-benchmarks = [
 	"pallet-balances/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-identitee/runtime-benchmarks",
+	"pallet-session/runtime-benchmarks",
 	"pallet-skip-feeless-payment/runtime-benchmarks",
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-transaction-payment/runtime-benchmarks",
+	"pallet-validators/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
@@ -133,10 +139,12 @@ try-runtime = [
 	"pallet-balances/try-runtime",
 	"pallet-grandpa/try-runtime",
 	"pallet-identitee/try-runtime",
+	"pallet-session/try-runtime",
 	"pallet-skip-feeless-payment/try-runtime",
 	"pallet-sudo/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
+	"pallet-validators/try-runtime",
 	"sp-runtime/try-runtime",
 ]
 

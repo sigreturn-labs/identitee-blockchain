@@ -14,14 +14,18 @@ use frame_support::{
 use frame_system::limits::{BlockLength, BlockWeights};
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::{traits::One, Perbill};
+use sp_runtime::{
+	traits::{ConvertInto, One, OpaqueKeys},
+	Perbill,
+};
 use sp_version::RuntimeVersion;
 
 // Local module imports
 use super::{
 	AccountId, Aura, Balance, Balances, Block, BlockNumber, Hash, Nonce, PalletInfo, Runtime,
 	RuntimeCall, RuntimeEvent, RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask,
-	System, BLOCK_HASH_COUNT, DAYS, EXISTENTIAL_DEPOSIT, SLOT_DURATION, VERSION,
+	SessionKeys, System, Validators, BLOCK_HASH_COUNT, DAYS, EXISTENTIAL_DEPOSIT, MINUTES,
+	SLOT_DURATION, VERSION,
 };
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -46,7 +50,7 @@ parameter_types! {
 ///
 /// This can be a tuple of types, each implementing `OnRuntimeUpgrade`.
 #[allow(unused_parens)]
-type SingleBlockMigrations = ();
+type SingleBlockMigrations = (crate::migrations::SessionFromConsensus);
 
 /// The default types are being injected by [`derive_impl`](`frame_support::derive_impl`) from
 /// [`SoloChainDefaultConfig`](`struct@frame_system::config_preludes::SolochainDefaultConfig`),
@@ -80,10 +84,13 @@ impl frame_system::Config for Runtime {
 	type SingleBlockMigrations = SingleBlockMigrations;
 }
 
+/// Maximum number of validators, Aura authorities and GRANDPA authorities.
+pub const MAX_VALIDATORS: u32 = 32;
+
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
-	type MaxAuthorities = ConstU32<32>;
+	type MaxAuthorities = ConstU32<MAX_VALIDATORS>;
 	type AllowMultipleBlocksPerSlot = ConstBool<false>;
 	type SlotDuration = pallet_aura::MinimumPeriodTimesTwo<Runtime>;
 }
@@ -92,7 +99,7 @@ impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 
 	type WeightInfo = ();
-	type MaxAuthorities = ConstU32<32>;
+	type MaxAuthorities = ConstU32<MAX_VALIDATORS>;
 	type MaxNominators = ConstU32<0>;
 	type MaxSetIdSessionEntries = ConstU64<0>;
 
@@ -157,4 +164,36 @@ impl pallet_identitee::Config for Runtime {
 	type AuthorityOrigin = frame_system::EnsureRoot<AccountId>;
 	type QuotaWindow = ConstU32<DAYS>;
 	type NameQuarantine = ConstU32<{ 30 * DAYS }>;
+}
+
+/// Length of a session, in blocks. Validator set changes take effect at the start of the session
+/// after next, so within two sessions.
+pub const SESSION_PERIOD: BlockNumber = 10 * MINUTES;
+
+/// Sessions of `SESSION_PERIOD` blocks, starting at block 0.
+type Sessions = pallet_session::PeriodicSessions<ConstU32<SESSION_PERIOD>, ConstU32<0>>;
+
+impl pallet_session::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	/// A validator is identified by its account.
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = ConvertInto;
+	type ShouldEndSession = Sessions;
+	type NextSessionRotation = Sessions;
+	/// The validator set comes from the validators pallet, managed by root.
+	type SessionManager = Validators;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = SessionKeys;
+	type DisablingStrategy = ();
+	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+	type Currency = Balances;
+	/// Keys set by a validator itself hold no deposit: validators are chosen by root.
+	type KeyDeposit = ConstU128<0>;
+}
+
+impl pallet_validators::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_validators::weights::SubstrateWeight<Runtime>;
+	type ManagerOrigin = frame_system::EnsureRoot<AccountId>;
+	type MaxValidators = ConstU32<MAX_VALIDATORS>;
 }

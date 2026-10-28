@@ -4464,11 +4464,13 @@ dependencies = [
  "pallet-balances",
  "pallet-grandpa",
  "pallet-identitee",
+ "pallet-session",
  "pallet-skip-feeless-payment",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
+ "pallet-validators",
  "parity-scale-codec",
  "scale-info",
  "serde_json",
@@ -7068,6 +7070,20 @@ dependencies = [
  "sp-api",
  "sp-runtime",
  "sp-weights",
+]
+
+[[package]]
+name = "pallet-validators"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-session",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 //! The `identitee_testnet` genesis preset: the public testnet served at wss://rpc.identit.ee.
 //!
 //! Builds the real genesis storage from the preset (as `export-chain-spec` does) and checks the
-//! values the deployment relies on: the validator's session keys, the owner as sudo and full agent,
+//! values the deployment relies on: the validator and its session keys, the owner as sudo and full agent,
 //! the migrator, the verifier.
 
 use identitee_runtime::{
@@ -84,6 +84,12 @@ fn testnet_genesis_values() {
 				.map(|(k, w)| (<[u8; 32]>::try_from(AsRef::<[u8]>::as_ref(&k)).unwrap(), w))
 				.collect();
 		assert_eq!(grandpa, vec![(TESTNET_GRANDPA, 1)]);
+		// The validator is the owner's account, through sessions.
+		assert_eq!(
+			pallet_validators::Validators::<Runtime>::get().into_inner(),
+			vec![owner.clone()]
+		);
+		assert_eq!(pallet_session::Validators::<Runtime>::get(), vec![owner.clone()]);
 
 		// Authority 0 "identitee": the owner with every capability, the migrator with MIGRATE only,
 		// the verifier with ATTEST_FIELDS and PERSON_FACTS.

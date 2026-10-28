@@ -1,10 +1,10 @@
 //! The identitee runtime: a Polkadot SDK solochain whose purpose is the identitee pallet.
 //!
 //! Besides `pallet_identitee`, it holds the pallets a standalone chain needs: Aura block
-//! production, GRANDPA finality, balances, transaction payment (skipped for feeless identity
-//! calls) and sudo. Pallet configuration lives in `configs`, the runtime APIs in
-//! `apis`, and the transaction extension that lets never-funded accounts write their identity in
-//! `extensions`.
+//! production, GRANDPA finality, sessions over a validator set managed by root, balances,
+//! transaction payment (skipped for feeless identity calls) and sudo. Pallet configuration lives in
+//! `configs`, the runtime APIs in `apis`, the transaction extension that lets never-funded accounts
+//! write their identity in `extensions`, and upgrade migrations in `migrations`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -16,6 +16,7 @@ pub mod apis;
 mod benchmarks;
 pub mod configs;
 pub mod extensions;
+pub mod migrations;
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -70,7 +71,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: alloc::borrow::Cow::Borrowed("identitee"),
 	authoring_version: 1,
 	// Bumped with every runtime upgrade, so nodes and clients see that the logic changed.
-	spec_version: 8,
+	spec_version: 9,
 	impl_version: 1,
 	apis: apis::RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -225,4 +226,11 @@ mod runtime {
 
 	#[runtime::pallet_index(8)]
 	pub type Identitee = pallet_identitee;
+
+	// Declared before Session: session's genesis reads the validator set.
+	#[runtime::pallet_index(9)]
+	pub type Validators = pallet_validators;
+
+	#[runtime::pallet_index(10)]
+	pub type Session = pallet_session;
 }

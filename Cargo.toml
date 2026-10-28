@@ -7,7 +7,7 @@ repository = "https://github.com/sigreturn-labs/identitee-blockchain"
 
 [workspace]
 resolver = "2"
-members = ["node", "pallets/identitee", "runtime"]
+members = ["node", "pallets/identitee", "pallets/validators", "runtime"]
 
 [workspace.lints.rust]
 suspicious_double_ref_op = { level = "allow", priority = 2 }
@@ -52,6 +52,7 @@ zero-prefixed-literal = { level = "allow", priority = 2 }            # 00_1000_0
 # Local crates
 identitee-runtime = { path = "runtime" }
 pallet-identitee = { path = "pallets/identitee", default-features = false }
+pallet-validators = { path = "pallets/validators", default-features = false }
 
 # Polkadot SDK stable2606-3 (aligned with psvm) and third-party crates
 clap = { version = "4.5.13" }
@@ -71,6 +72,7 @@ pallet-aura = { version = "48.0.0", default-features = false }
 pallet-balances = { version = "50.0.0", default-features = false }
 pallet-grandpa = { version = "49.0.0", default-features = false }
 pallet-skip-feeless-payment = { version = "23.0.0", default-features = false }
+pallet-session = { version = "49.0.1", default-features = false }
 pallet-sudo = { version = "49.0.0", default-features = false }
 pallet-timestamp = { version = "48.0.0", default-features = false }
 pallet-transaction-payment = { version = "49.0.0", default-features = false }

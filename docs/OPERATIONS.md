@@ -39,8 +39,8 @@ explorer API from the browser (see "The explorer").
 
 Every service listens on localhost; only nginx is exposed. The node is an archive node
 (`--state-pruning archive --blocks-pruning archive`): the whole history stays queryable, which the
-explorer needs to decode old blocks. With a single
-validator, Aura produces a block every 6 s and GRANDPA finalizes with one authority of weight 1.
+explorer needs to decode old blocks. Aura produces a block every 6 s and GRANDPA finalizes, both with
+the keys of the validator set, which `pallet_session` hands them every 10 minutes (see "Validators").
 
 ## Building the release binary
 
@@ -197,8 +197,38 @@ identitee-node --chain deploy/chainspec/identitee-testnet-raw.json \
   --bootnodes /dns/rpc.identit.ee/tcp/30333/p2p/12D3KooWDdpoKG1W5B8da4DSwTQ1WpbSBLG67V1czucqRwFnqbpz
 ```
 
-A full node does not produce or finalize blocks. The validator set is fixed in the genesis (there is
-no session pallet), so adding a validator takes a new genesis or a runtime upgrade.
+A full node does not produce or finalize blocks. To make it a validator, see "Validators".
+
+### Validators
+
+The validator set is a list of accounts kept by the validators pallet and managed by root. Each
+validator has session keys: an Aura key (sr25519) and a GRANDPA key (ed25519), held in its node's
+keystore. Sessions last 10 minutes (100 blocks); a change to the set takes effect at the start of
+the session after next, so within 20 minutes.
+
+To add a validator:
+
+1. The validator runs a full node with `--validator`, connected to the testnet, and generates its
+   keys with `author_rotateKeys` on its own RPC (or inserts them with `key insert`, key types `aura`
+   and `gran`). It sends the operator its account address and the two public keys.
+2. The operator submits, from the sudo account:
+   `sudo(validators.addValidator(<account>, { aura: <0x aura key>, grandpa: <0x grandpa key> }))`.
+   The account needs no balance and no proof of ownership: root vouches for the keys.
+3. Two sessions later the node produces blocks in turn and votes in GRANDPA. `session.validators`
+   lists the active set and `grandpa.currentSetId` increases by one.
+
+`sudo(validators.removeValidator(<account>))` removes one; the last cannot be removed. A validator
+rotates its own keys with `session.setKeys` (with the ownership proof its node produces) and clears
+them with `session.purgeKeys`.
+
+GRANDPA finalizes with more than two thirds of the voters: with two validators, both must be online,
+or finality stops until the missing one returns, then catches up. Three validators tolerate one
+offline. With several validators, Aura also stops producing on a node left without any peer, unless
+it runs with `--force-authoring`: the operator's node does (`deploy/identitee-node.service`), so blocks
+keep coming in its slots while the other validators are away.
+
+Runtime 9 introduced sessions on a chain started without them: its migration made the sudo account
+the validator owning the genesis keys, so no authority changed during the upgrade.
 
 ## nginx and TLS
 
@@ -592,5 +622,8 @@ The verifier's `verifier.db` survives a reset, including the register of KYC doc
 one address). To start afresh, stop the verifier and move `verifier.db` aside; the `.key` files and
 `matrix/` can stay.
 
-Changing the session keys also requires a new genesis: generate a new `session.phrase`, delete the
-keystore, update `TESTNET_AURA` and `TESTNET_GRANDPA`, rebuild, and reinsert the keys.
+Changing the session keys of the operator's validator needs no new genesis: insert the new keys in
+the keystore, then register them with `session.setKeys` from the sudo account (proof from
+`author_rotateKeysWithOwner`) or `sudo(validators.addValidator)` on a fresh account. They take effect
+two sessions later; keep the old keys in the keystore until then. `TESTNET_AURA` and `TESTNET_GRANDPA`
+only matter for a new genesis.

@@ -1,10 +1,12 @@
-# identitee testnet validator (single authority), installed as
+# identitee testnet validator (the operator's), installed as
 # /etc/systemd/system/identitee-node.service. See docs/OPERATIONS.md.
 #
 # RPC listens on 127.0.0.1:9944 only (no --rpc-external): nginx publishes it over TLS
 # (deploy/nginx-rpc.conf). --rpc-methods safe is explicit because nginx connects from localhost,
 # which "auto" would treat as trusted and serve unsafe methods (author_insertKey...) to the world.
 # P2P is public on tcp/30333 (firewall open) so that full nodes can sync from this bootnode.
+# --force-authoring: with several validators, Aura stops producing on a node left without peers;
+# this node keeps producing in its slots so the chain advances while the others are away.
 
 [Unit]
 Description=identitee testnet node (validator)
@@ -20,6 +22,7 @@ ExecStart=/usr/local/bin/identitee-node \
 	--base-path /var/lib/identitee \
 	--node-key-file /var/lib/identitee/node-key \
 	--validator \
+	--force-authoring \
 	--name identitee-01 \
 	--listen-addr /ip4/0.0.0.0/tcp/30333 \
 	--public-addr /dns/rpc.identit.ee/tcp/30333 \

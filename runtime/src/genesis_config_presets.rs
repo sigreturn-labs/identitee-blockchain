@@ -18,7 +18,10 @@
 //! Genesis presets: `development` and `local_testnet` for local chains with the well-known
 //! development keys, and `identitee_testnet` for the public testnet.
 
-use crate::{AccountId, BalancesConfig, IdentiteeConfig, RuntimeGenesisConfig, SudoConfig};
+use crate::{
+	AccountId, BalancesConfig, IdentiteeConfig, RuntimeGenesisConfig, SessionConfig, SessionKeys,
+	SudoConfig, ValidatorsConfig,
+};
 use alloc::{vec, vec::Vec};
 use frame_support::build_struct_json_patch;
 use pallet_identitee::types::{Capabilities, GenesisAgent, GenesisAuthority};
@@ -32,7 +35,8 @@ use sp_keyring::Sr25519Keyring;
 /// Name of the public testnet preset (served at wss://rpc.identit.ee).
 pub const IDENTITEE_TESTNET_PRESET: &str = "identitee_testnet";
 
-/// The testnet operator account: sudo, endowed, agent of authority 0 with every capability.
+/// The testnet operator account: sudo, endowed, agent of authority 0 with every capability, and
+/// the account of the testnet validator.
 pub const TESTNET_OWNER: [u8; 32] =
 	hex32("fafe6ff6945e27f3c39fe8bf5a90cb0fa61b3c27c9faa3ba3741362643ee303f");
 /// Migration service account (sr25519, its secret held by the service): agent with MIGRATE.
@@ -72,13 +76,33 @@ const fn hex32(hex: &str) -> [u8; 32] {
 	out
 }
 
+/// The session genesis of `validators`: each account with its Aura and GRANDPA keys. Session hands
+/// the keys to Aura and GRANDPA, whose own genesis lists stay empty.
+fn validators_genesis(
+	validators: Vec<(AccountId, AuraId, GrandpaId)>,
+) -> (ValidatorsConfig, SessionConfig) {
+	(
+		ValidatorsConfig { validators: validators.iter().map(|v| v.0.clone()).collect() },
+		SessionConfig {
+			keys: validators
+				.into_iter()
+				.map(|(account, aura, grandpa)| {
+					(account.clone(), account, SessionKeys { aura, grandpa })
+				})
+				.collect(),
+			..Default::default()
+		},
+	)
+}
+
 /// The genesis config of the development presets: `initial_authorities` validate, every
 /// `endowed_accounts` entry gets 2^60 planck, `root` is sudo, and Alice and Bob serve authority 0.
 fn testnet_genesis(
-	initial_authorities: Vec<(AuraId, GrandpaId)>,
+	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	endowed_accounts: Vec<AccountId>,
 	root: AccountId,
 ) -> Value {
+	let (validators_config, session_config) = validators_genesis(initial_authorities);
 	build_struct_json_patch!(RuntimeGenesisConfig {
 		balances: BalancesConfig {
 			balances: endowed_accounts
@@ -87,12 +111,8 @@ fn testnet_genesis(
 				.map(|k| (k, 1u128 << 60))
 				.collect::<Vec<_>>(),
 		},
-		aura: pallet_aura::GenesisConfig {
-			authorities: initial_authorities.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
-		},
-		grandpa: pallet_grandpa::GenesisConfig {
-			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect::<Vec<_>>(),
-		},
+		validators: validators_config,
+		session: session_config,
 		sudo: SudoConfig { key: Some(root) },
 		identitee: IdentiteeConfig {
 			authorities: identitee_authorities(
@@ -119,19 +139,20 @@ fn identitee_authorities(
 	vec![GenesisAuthority { name: "identitee".into(), agents }]
 }
 
-/// Return the public testnet genesis config: one validator, the owner as sudo and full agent of
-/// "identitee", the migrator as MIGRATE agent, the verifier as ATTEST_FIELDS and PERSON_FACTS
-/// agent. Only the owner holds a balance.
+/// Return the public testnet genesis config: one validator owned by the owner, the owner as sudo
+/// and full agent of "identitee", the migrator as MIGRATE agent, the verifier as ATTEST_FIELDS and
+/// PERSON_FACTS agent. Only the owner holds a balance.
 pub fn identitee_testnet_config_genesis() -> Value {
 	let owner = AccountId::from(TESTNET_OWNER);
+	let (validators_config, session_config) = validators_genesis(vec![(
+		owner.clone(),
+		AuraId::from(sr25519::Public::from_raw(TESTNET_AURA)),
+		GrandpaId::from(ed25519::Public::from_raw(TESTNET_GRANDPA)),
+	)]);
 	build_struct_json_patch!(RuntimeGenesisConfig {
 		balances: BalancesConfig { balances: vec![(owner.clone(), TESTNET_OWNER_BALANCE)] },
-		aura: pallet_aura::GenesisConfig {
-			authorities: vec![AuraId::from(sr25519::Public::from_raw(TESTNET_AURA))],
-		},
-		grandpa: pallet_grandpa::GenesisConfig {
-			authorities: vec![(GrandpaId::from(ed25519::Public::from_raw(TESTNET_GRANDPA)), 1)],
-		},
+		validators: validators_config,
+		session: session_config,
 		sudo: SudoConfig { key: Some(owner.clone()) },
 		identitee: IdentiteeConfig {
 			authorities: identitee_authorities(
@@ -150,6 +171,7 @@ pub fn identitee_testnet_config_genesis() -> Value {
 pub fn development_config_genesis() -> Value {
 	testnet_genesis(
 		vec![(
+			Sr25519Keyring::Alice.to_account_id(),
 			sp_keyring::Sr25519Keyring::Alice.public().into(),
 			sp_keyring::Ed25519Keyring::Alice.public().into(),
 		)],
@@ -168,10 +190,12 @@ pub fn local_config_genesis() -> Value {
 	testnet_genesis(
 		vec![
 			(
+				Sr25519Keyring::Alice.to_account_id(),
 				sp_keyring::Sr25519Keyring::Alice.public().into(),
 				sp_keyring::Ed25519Keyring::Alice.public().into(),
 			),
 			(
+				Sr25519Keyring::Bob.to_account_id(),
 				sp_keyring::Sr25519Keyring::Bob.public().into(),
 				sp_keyring::Ed25519Keyring::Bob.public().into(),
 			),
