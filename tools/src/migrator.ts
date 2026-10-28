@@ -648,6 +648,35 @@ export async function connectIdentitee(ws: string): Promise<ApiPromise> {
   }
 }
 
+/** Resolves with the spec version of the runtime once the node runs another one than `api` was set up
+ * with. On an upgrade polkadot.js reloads the metadata through `state_getMetadata`, at version 14,
+ * which lists no runtime API: `api.call.identiteeApi`, and the runtime calls of `api.at` for the new
+ * runtime, are gone until a new connection. So the services stop then, and systemd starts them again
+ * on the new runtime. `stop` ends the subscription. */
+export function runtimeUpgrade(api: ApiPromise): { upgraded: Promise<number>; stop: () => void } {
+  const from = api.runtimeVersion.specVersion.toNumber();
+  let unsubscribe: (() => void) | undefined;
+  let stopped = false;
+  const upgraded = new Promise<number>((resolve) => {
+    api.rpc.state
+      .subscribeRuntimeVersion((version) => {
+        const spec = version.specVersion.toNumber();
+        if (spec !== from) resolve(spec);
+      })
+      .then(
+        (u) => (stopped ? u() : (unsubscribe = u)),
+        () => undefined,
+      );
+  });
+  return {
+    upgraded,
+    stop: () => {
+      stopped = true;
+      unsubscribe?.();
+    },
+  };
+}
+
 /** Where the identities come from: the snapshot files if there are any, else the People Chains. */
 function sourceFor(config: Config, limits: Limits, log: Logger): SourceReader {
   if (config.snapshots.length > 0) {
@@ -777,14 +806,18 @@ async function run(config: Config, log: Logger, deps: MainDeps, signals: ReturnT
     return 1;
   }
 
-  const signal = await signals.stopped;
-  log('info', 'stopping', { signal });
+  const upgrade = runtimeUpgrade(api);
+  const stop = await Promise.race([signals.stopped.then((signal) => ({ signal })), upgrade.upgraded.then((specVersion) => ({ specVersion }))]);
+  upgrade.stop();
+  if ('signal' in stop) log('info', 'stopping', { signal: stop.signal });
+  else log('warn', 'stopping', { reason: 'runtime_upgraded', specVersion: stop.specVersion });
   signals.stopping();
   await migrator.stop();
   await source.close();
   await api.disconnect().catch(() => undefined);
   log('info', 'stopped');
-  return 0;
+  // an upgrade is not a failure, but only a failure makes systemd start the service again
+  return 'signal' in stop ? 0 : 1;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

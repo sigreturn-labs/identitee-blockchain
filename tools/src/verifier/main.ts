@@ -18,7 +18,7 @@ import { Keyring } from '@polkadot/keyring';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 
-import { connectIdentitee, messageOf, watchSignals } from '../migrator.ts';
+import { connectIdentitee, messageOf, runtimeUpgrade, watchSignals } from '../migrator.ts';
 import { LiveChain, SS58_PREFIX } from './chain.ts';
 import { channelRegistry, type Channel } from './channels.ts';
 import { parseConfig, type Config } from './config.ts';
@@ -160,12 +160,16 @@ async function run(cfg: Config, log: Logger, deps: MainDeps, signals: ReturnType
     return 1;
   }
 
-  const signal = await signals.stopped;
-  log('info', 'stopping', { signal });
+  const upgrade = runtimeUpgrade(api);
+  const stop = await Promise.race([signals.stopped.then((signal) => ({ signal })), upgrade.upgraded.then((specVersion) => ({ specVersion }))]);
+  upgrade.stop();
+  if ('signal' in stop) log('info', 'stopping', { signal: stop.signal });
+  else log('warn', 'stopping', { reason: 'runtime_upgraded', specVersion: stop.specVersion });
   signals.stopping();
   await shutdown();
   log('info', 'stopped');
-  return 0;
+  // an upgrade is not a failure, but only a failure makes systemd start the service again
+  return 'signal' in stop ? 0 : 1;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -296,6 +296,15 @@ cd tools && tar -czf - package.json package-lock.json tsconfig.json matrix-crypt
 - `try-restart` of a unit that is not installed yet (`identitee-explorer`, before "The explorer" is set
   up) fails with `Unit ... not found`. That is harmless: the new code is already in place.
 
+### Runtime upgrades and the services
+
+After a `setCode`, polkadot.js reloads the metadata at version 14, which lists no runtime API: calls
+such as `identiteeApi.profile` and `identiteeApi.trustLevel` would fail until a new connection. So the
+migrator, the verifier and the explorer watch the runtime version: when it changes they log `stopping`
+with `"reason":"runtime_upgraded"` and the new `specVersion`, stop cleanly and exit 1, and systemd
+starts them again 15 s later (`Restart=on-failure`) on the new runtime. Nothing to do by hand; check
+after an upgrade that the three are `active` again.
+
 ## The migration service
 
 Executes `request_migration`: it follows the node's finalized blocks, reads the identity on the
@@ -473,6 +482,7 @@ Logs are one JSON object per line (`journalctl -u identitee-explorer -o cat`). S
 | `indexer_failed` | Catch-up was interrupted; retried with a wait that doubles from 1 s to 30 s |
 | `ingest_failed` | One block could not be decoded or stored; retried with a growing wait. A block that keeps failing holds the index at that block, and the message says why |
 | `chain_changed` | The node serves other blocks than the index (reset or restore): the database is marked and the service exits 1, to be started again by systemd |
+| `stopping` with `runtime_upgraded` | The node runs a new runtime: the service exits 1 and systemd starts it again on it (see "Runtime upgrades and the services") |
 | `genesis_changed` | At startup, after a `chain_changed` or with a node on another genesis: the old index was moved aside and a new one started |
 | `request_failed` | An API request ended in an internal error (the client gets a 500) |
 | `live_read_failed` | A read from the node failed while it was reachable (a decoding error, a state the node no longer keeps); the answer leaves that part null. Logged at most once a minute per message |

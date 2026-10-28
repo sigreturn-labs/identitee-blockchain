@@ -254,6 +254,7 @@ function stubApi(options: {
   spec?: string;
 }) {
   const sent: Sent[] = [];
+  let upgrade: ((spec: number) => void) | undefined;
   let inFlight = 0;
   let maxInFlight = 0;
   const makeTx = (call: string) => (...args: unknown[]) => ({
@@ -277,7 +278,15 @@ function stubApi(options: {
   });
   const api = {
     genesisHash: { toHex: () => GENESIS },
-    runtimeVersion: { specName: { toString: () => options.spec ?? 'identitee' } },
+    runtimeVersion: { specName: { toString: () => options.spec ?? 'identitee' }, specVersion: { toNumber: () => 10 } },
+    rpc: {
+      state: {
+        subscribeRuntimeVersion: async (callback: (v: unknown) => void) => {
+          upgrade = (spec) => callback({ specVersion: { toNumber: () => spec } });
+          return () => undefined;
+        },
+      },
+    },
     registry: {
       signedExtensions: [],
       findMetaError: (error: string) => {
@@ -290,7 +299,7 @@ function stubApi(options: {
     tx: { identitee: { provideJudgement: makeTx('provideJudgement'), grantFact: makeTx('grantFact') } },
     disconnect: async () => undefined,
   } as unknown as ApiPromise;
-  return { api, sent, maxInFlight: () => maxInFlight };
+  return { api, sent, maxInFlight: () => maxInFlight, upgrade: (spec: number) => upgrade?.(spec) };
 }
 
 const profileWith = (typed: Record<string, unknown>) => ({ identity: { typed, custom: {}, links: [] }, attestations: [], facts: [] });
@@ -693,6 +702,23 @@ describe('main', () => {
     const text = out.lines.join('');
     assert.ok(!text.includes(SURI) && !text.includes('tok:SECRET'));
     assert.deepEqual(out.events().map((e) => e.event).slice(-2), ['stopping', 'stopped']);
+  });
+
+  it('stops with exit 1 when the node upgrades its runtime, so that systemd starts it again', async () => {
+    const out = capture();
+    const stub = stubApi({});
+    const done = main({ IDENTITEE_VERIFIER_SURI: '//Alice//verifier', STATE_DIRECTORY: dir, VERIFIER_PORT: '0' }, {
+      connect: async () => stub.api,
+      write: out.write,
+      exit: () => assert.fail('no second signal'),
+      channels: [],
+    });
+    await waitFor(() => out.events().find((e) => e.event === 'listening'), 'listening');
+    stub.upgrade(10);
+    stub.upgrade(11);
+    assert.equal(await done, 1);
+    const stopping = out.events().find((e) => e.event === 'stopping') as unknown as { level: string; reason: string; specVersion: number };
+    assert.deepEqual([stopping.level, stopping.reason, stopping.specVersion], ['warn', 'runtime_upgraded', 11]);
   });
 
   it('exits 2 on a bad configuration and 1 on a node that is not identitee', async () => {

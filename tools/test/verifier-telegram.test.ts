@@ -1249,7 +1249,8 @@ describe('telegram channel: in the service', () => {
       const lines: string[] = [];
       const api = {
         genesisHash: { toHex: () => GENESIS },
-        runtimeVersion: { specName: { toString: () => 'identitee' } },
+        runtimeVersion: { specName: { toString: () => 'identitee' }, specVersion: { toNumber: () => 10 } },
+        rpc: { state: { subscribeRuntimeVersion: async () => () => undefined } },
         query: { identitee: { agents: async () => ({ toJSON: () => [0, 3] }) } },
         disconnect: async () => undefined,
       } as unknown as ApiPromise;

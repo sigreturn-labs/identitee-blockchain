@@ -44,6 +44,8 @@ interface FakeChain {
    */
   replace(from: number, tag: string, finalized: number): void;
   reconnect(): void;
+  /** The node now runs runtime `specVersion`. */
+  upgrade(specVersion: number): void;
 }
 
 /** A chain whose finalized head is `finalized`; getBlock of `failAt` throws once. */
@@ -60,6 +62,7 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
   const connectedSubs: Array<() => void> = [];
   const finalizedSubs: Array<(h: unknown) => void> = [];
   const newSubs: Array<(h: unknown) => void> = [];
+  const versionSubs: Array<(v: unknown) => void> = [];
   const chain: FakeChain = {
     api: undefined as unknown as ApiPromise,
     fetched: [],
@@ -79,6 +82,9 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
     reconnect() {
       for (const cb of [...connectedSubs]) cb();
     },
+    upgrade(specVersion) {
+      for (const cb of versionSubs) cb({ specVersion: num(specVersion) });
+    },
   };
   const subscribe = (list: Array<(h: unknown) => void>, first: () => number) => async (cb: (h: unknown) => void) => {
     list.push(cb);
@@ -90,6 +96,7 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
   };
   const api = {
     genesisHash: codec(hashOf(0)),
+    runtimeVersion: { specVersion: num(8), specName: { toString: () => 'identitee' } },
     isConnected: true,
     on: (event: string, cb: () => void) => {
       if (event === 'connected') connectedSubs.push(cb);
@@ -117,6 +124,13 @@ function fakeChain(finalized: number, failAt?: number): FakeChain {
         },
         subscribeFinalizedHeads: subscribe(finalizedSubs, () => head),
         subscribeNewHeads: subscribe(newSubs, () => head),
+      },
+      state: {
+        subscribeRuntimeVersion: async (cb: (v: unknown) => void) => {
+          versionSubs.push(cb);
+          cb({ specVersion: num(8) });
+          return () => versionSubs.splice(versionSubs.indexOf(cb), 1);
+        },
       },
     },
     at: async (h: { toHex(): string } | string) => {
@@ -373,6 +387,24 @@ describe('chain change', () => {
       assert.equal(again.openForGenesis(hashOf(0)).reset, true);
       assert.equal(again.lastIndexed(), null);
       again.close();
+    } finally {
+      t.done();
+    }
+  });
+
+  it('a runtime upgrade makes the explorer exit 1 with its reason, so that systemd starts it again on the new runtime', async () => {
+    const t = tmp();
+    try {
+      const chain = fakeChain(4);
+      const out: string[] = [];
+      const done = main({ EXPLORER_DB: t.db, EXPLORER_PORT: '0', EXPLORER_HOST: '127.0.0.1' }, { connect: async () => chain.api, write: (l) => out.push(l), exit: () => undefined });
+      const until = Date.now() + 2000;
+      while (!out.some((l) => l.includes('"connected"')) && Date.now() < until) await new Promise((r) => setTimeout(r, 10));
+      chain.upgrade(8);
+      chain.upgrade(9);
+      assert.equal(await done, 1);
+      const stopping = out.map((l) => JSON.parse(l)).find((l) => l.event === 'stopping');
+      assert.deepEqual([stopping.level, stopping.reason, stopping.specVersion], ['warn', 'runtime_upgraded', 9]);
     } finally {
       t.done();
     }

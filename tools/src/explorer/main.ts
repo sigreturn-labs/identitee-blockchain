@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url';
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 
-import { makeLogger, messageOf, watchSignals, type Logger } from '../migrator.ts';
+import { makeLogger, messageOf, runtimeUpgrade, watchSignals, type Logger } from '../migrator.ts';
 import { chainLive, ExplorerApi } from './api.ts';
 import { parseConfig, type ExplorerConfig } from './config.ts';
 import { ChainChangedError, Indexer } from './indexer.ts';
@@ -123,7 +123,10 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
   let indexer: Indexer | undefined;
   let loop: ReturnType<typeof keepIndexing> | undefined;
   let signal: string;
-  let chainChanged = false;
+  // the chain was replaced, or its runtime upgraded: stop, so that systemd starts again on it
+  let restart = false;
+  let upgrade: ReturnType<typeof runtimeUpgrade> | undefined;
+  let upgradedTo: number | undefined;
 
   const first = await Promise.race([connecting.then((connected) => ({ connected }), (e: unknown) => ({ failed: e })), signals.stopped.then((s) => ({ signal: s }))]);
   if ('signal' in first) {
@@ -139,15 +142,21 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
     log('info', 'connected', { node: cfg.node, genesis: api.genesisHash.toHex() });
     let changed: () => void = () => undefined;
     const onChange = new Promise<string>((resolve) => (changed = () => resolve('chain_changed')));
+    upgrade = runtimeUpgrade(api);
+    const onUpgrade = upgrade.upgraded.then((specVersion) => {
+      upgradedTo = specVersion;
+      return 'runtime_upgraded';
+    });
     indexer = new Indexer(api, store, log, { onChainChanged: () => changed() });
     server.attach(chainLive(api, cfg.labels), indexer);
     const running = indexer;
     loop = keepIndexing(() => running.start(), log);
-    signal = await Promise.race([signals.stopped, onChange]);
-    chainChanged = signal === 'chain_changed';
+    signal = await Promise.race([signals.stopped, onChange, onUpgrade]);
+    restart = signal === 'chain_changed' || signal === 'runtime_upgraded';
   }
+  upgrade?.stop();
 
-  log(chainChanged ? 'warn' : 'info', 'stopping', chainChanged ? { reason: signal } : { signal });
+  log(restart ? 'warn' : 'info', 'stopping', restart ? { reason: signal, ...(upgradedTo === undefined ? {} : { specVersion: upgradedTo }) } : { signal });
   signals.stopping();
   loop?.stop();
   await indexer?.stop();
@@ -159,7 +168,7 @@ async function run(cfg: ExplorerConfig, log: Logger, deps: MainDeps, signals: Re
   await api?.disconnect().catch(() => undefined);
   store.close();
   log('info', 'stopped');
-  return chainChanged ? 1 : 0;
+  return restart ? 1 : 0;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

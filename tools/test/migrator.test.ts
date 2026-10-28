@@ -818,12 +818,14 @@ describe('limits of the node', () => {
 describe('main', () => {
   const SURI = '//Bob';
   const env = (extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({ IDENTITEE_MIGRATOR_SURI: SURI, ...extra });
+  /** Each running node's way to say it now runs runtime `spec`. */
+  const upgrades: Array<(spec: number) => void> = [];
   const node = (): ApiPromise => {
     const pending = ['Polkadot', 1];
     const key = { args: [{ toString: () => 'dave' }], toHex: () => '0x01' };
     const head = { number: { toNumber: () => 5 }, hash: { toHex: () => '0x05' } };
     return {
-      runtimeVersion: { specName: { toString: () => 'identitee' } },
+      runtimeVersion: { specName: { toString: () => 'identitee' }, specVersion: { toNumber: () => 10 } },
       registry: { signedExtensions: [] },
       consts: {
         identitee: Object.fromEntries(
@@ -844,6 +846,12 @@ describe('main', () => {
             return () => undefined;
           },
           getFinalizedHead: async () => head.hash,
+        },
+        state: {
+          subscribeRuntimeVersion: async (callback: (v: unknown) => void) => {
+            upgrades.push((spec) => callback({ specVersion: { toNumber: () => spec } }));
+            return () => undefined;
+          },
         },
       },
       at: async () => ({
@@ -916,6 +924,25 @@ describe('main', () => {
     // The connection that was still being made is closed when it arrives.
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.ok(disconnected);
+  });
+
+  it('a runtime upgrade stops it with exit 1, so that systemd starts it again on the new runtime', async () => {
+    const out = capture();
+    upgrades.length = 0;
+    const done = main([], env(), { ...noExit, write: out.write, connect: async () => node(), makeSource: () => ({ read: async () => null, close: async () => undefined }) });
+    await within(
+      (async () => {
+        while (upgrades.length === 0) await new Promise((resolve) => setTimeout(resolve, 10));
+      })(),
+      3_000,
+      'the subscription',
+    );
+    upgrades[0]!(10);
+    upgrades[0]!(11);
+    assert.equal(await within(done, 3_000, 'main'), 1);
+    const stopping = out.lines.map((l) => JSON.parse(l)).find((l) => l.event === 'stopping');
+    assert.deepEqual([stopping.level, stopping.reason, stopping.specVersion], ['warn', 'runtime_upgraded', 11]);
+    assert.equal(out.events().at(-1), 'stopped');
   });
 
   it('removes its signal handlers when it returns', async () => {
