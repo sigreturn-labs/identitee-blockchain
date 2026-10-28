@@ -1,0 +1,132 @@
+# Builds identitee-node for Linux x86_64 and publishes it as a GitHub release, with the runtime wasm,
+# the testnet chain spec and their SHA-256 sums.
+#
+# Triggered by pushing a tag `v*` (for example v0.1.0-runtime.9). Built on Ubuntu 22.04, so the
+# binary needs glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+, and most distributions of the last
+# few years. The job refuses a binary that would need more.
+#
+# Supply chain: only GitHub's own actions, pinned by commit; no build cache; protoc fetched from its
+# release and checked against a pinned SHA-256. The build job reads the repository only; the
+# publish job, which writes, runs no build code.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    outputs:
+      spec: ${{ steps.package.outputs.spec }}
+    env:
+      CARGO_TERM_COLOR: never
+      MAX_GLIBC: "2.35"
+      PROTOC_VERSION: "25.5"
+      PROTOC_SHA256: e1ed237a17b2e851cf9662cb5ad02b46e70ff8e060e05984725bc4b4228c6b28
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev unzip
+          # Ubuntu 22.04's protoc is too old for proto3 optional fields.
+          curl -fsSL -o protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          echo "${PROTOC_SHA256}  protoc.zip" | sha256sum -c -
+          sudo unzip -o protoc.zip -d /usr/local bin/protoc 'include/*'
+          rm protoc.zip
+          protoc --version
+
+      # rustup reads rust-toolchain.toml: Rust 1.93.0 with rust-src and the wasm32v1-none target.
+      - name: Toolchain
+        run: rustup show active-toolchain
+
+      - name: Build
+        run: cargo build --locked --release -p identitee-node
+
+      - name: Check the binary
+        run: |
+          bin=target/release/identitee-node
+          "$bin" --version
+          needed=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
+          echo "highest glibc symbol: $needed"
+          if [ "$(printf '%s\n%s\n' "$needed" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]; then
+            echo "the binary needs glibc $needed, more than $MAX_GLIBC" >&2
+            exit 1
+          fi
+          # A development chain must produce blocks.
+          "$bin" --dev --tmp --no-telemetry --no-prometheus --rpc-port 19944 > dev.log 2>&1 &
+          pid=$!
+          sleep 30
+          kill "$pid"
+          grep -q 'Imported #2' dev.log || { cat dev.log; exit 1; }
+
+      - name: Package
+        id: package
+        run: |
+          spec=$(grep -oP 'spec_version: \K[0-9]+' runtime/src/lib.rs)
+          mkdir dist
+          cp target/release/identitee-node dist/identitee-node
+          tar -C dist -czf "dist/identitee-node-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" identitee-node
+          rm dist/identitee-node
+          cp target/release/wbuild/identitee-runtime/identitee_runtime.compact.compressed.wasm \
+            "dist/identitee-runtime-${spec}.compact.compressed.wasm"
+          cp deploy/chainspec/identitee-testnet-raw.json dist/
+          (cd dist && sha256sum * > SHA256SUMS)
+          cat dist/SHA256SUMS
+          echo "spec=$spec" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+
+      - name: Check the sums
+        run: cd dist && sha256sum -c SHA256SUMS
+
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: "dist/*"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPEC: ${{ needs.build.outputs.spec }}
+        run: |
+          cat > notes.md <<EOF
+          identitee-node built from ${GITHUB_SHA::7}, runtime spec version ${SPEC}.
+
+          - \`identitee-node-${GITHUB_REF_NAME}-linux-x86_64.tar.gz\`: the node, Linux x86_64, glibc 2.35 or newer.
+          - \`identitee-runtime-${SPEC}.compact.compressed.wasm\`: the runtime built from the same commit.
+          - \`identitee-testnet-raw.json\`: the public testnet chain spec.
+          - \`SHA256SUMS\`: check with \`sha256sum -c SHA256SUMS --ignore-missing\`. Build provenance:
+            \`gh attestation verify <file> -R ${GITHUB_REPOSITORY}\`.
+
+          Running a full node or a validator: see docs/OPERATIONS.md.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
