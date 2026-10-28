@@ -79,6 +79,18 @@ Replacing the binary does not change the chain's runtime. The runtime is Wasm st
 `spec_version` in `runtime/src/lib.rs`, build, and submit `setCode` from the sudo account with
 `target-trixie/release/wbuild/identitee-runtime/identitee_runtime.compact.compressed.wasm`.
 
+### Wallets and the metadata hash
+
+The runtime is built without the `metadata-hash` feature, so it carries no metadata hash and its
+`CheckMetadataHash` extension only accepts mode 0. A wallet that signs in mode 1 (the RFC-78 check
+that some wallets turn on by default, and that Ledger requires) is refused with
+`1011: Unknown Transaction Validity: CannotLookup`. Sign with the metadata hash check off; a
+transaction in mode 0 goes through. Building the runtime with `--features metadata-hash` would make
+mode 1 work, and needs a `setCode`.
+
+After a `setCode`, wallets that keep the chain's metadata (browser extensions, polkadot.js Apps under
+Settings, Metadata) must update it before signing again.
+
 ## Keys and secrets
 
 Generate every key on the server with the shipped binary (`identitee-node key generate`), never in the
