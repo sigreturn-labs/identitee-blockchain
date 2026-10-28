@@ -42,7 +42,7 @@ export function Block() {
             </Row>
             <Row label="Time">{data.timestamp === null ? <span class="x-quiet">Genesis</span> : <>{formatTime(data.timestamp)} <span class="x-quiet">(<Age ms={data.timestamp} now={now} />)</span></>}</Row>
             <Row label="Produced by">
-              <Producer author={data.author} label={data.authorLabel} />
+              <Producer author={data.author} label={data.authorLabel} account={data.authorAccount} />
             </Row>
             <Row label="Finalized by">
               {finalized === null ? <span class="x-quiet">Unknown</span> : data.number > finalized ? <span class="x-pending">Not finalized yet</span> : finalizedBy(data)}

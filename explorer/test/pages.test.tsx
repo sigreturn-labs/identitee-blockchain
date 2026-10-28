@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/app.tsx";
+import { forgetIdentities } from "../src/identities.ts";
 import { Value } from "../src/ui/value.tsx";
 import { LocationProvider } from "preact-iso";
 import { FakeEventSource } from "./support/no-network.ts";
@@ -139,6 +140,15 @@ describe("Home", () => {
 });
 
 describe("Block", () => {
+  it("names its producer by the account owning its key, with the account's username", async () => {
+    forgetIdentities();
+    serve({ "/api/status": status, "/api/block/1236": { ...block, authorAccount: ALICE }, "/api/identities": { items: { [ALICE]: { display: "Alice", username: "alice", trust: null } } } });
+    open("/block/1236");
+    await waitFor(() => expect(row("Produced by")).toBe("@alice(idrf…3ogk)"));
+    const link = main().querySelector<HTMLAnchorElement>(".x-fields a.x-account");
+    expect(link?.getAttribute("href")).toBe(`/account/${ALICE}`);
+  });
+
   it("shows its fields, who produced it and the GRANDPA set that finalized it", async () => {
     const asked = serve({ "/api/status": status, "/api/block/1236": block });
     open("/block/1236");

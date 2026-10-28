@@ -122,6 +122,7 @@ function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boole
     roles: (address: string) => f.guard({ sudo: address === ALICE, validator: address === ALICE, agent: [] }),
     authorities: () => f.guard(AUTHORITIES),
     validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01' }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01' }], setId: 0 }),
+    auraKeyOwner: (key: string) => f.guard(key === ALICE_HEX ? ALICE : null),
     health: () => f.guard({ peers: 2, isSyncing: false, shouldHavePeers: true }),
     nameOwner: (name: string) => f.guard(name === 'alice' ? ALICE : name === '010' ? BOB : null),
     blockLogs(blockHash: string) {
@@ -252,13 +253,13 @@ describe('blocks', () => {
     assert.equal((await ok(`/api/block/${hash(0x10, 5).toUpperCase().replace('0X', '0x')}`)).number, 5);
   });
 
-  it('names the author of each listed block from the labels, null when it has none', async () => {
+  it('names the author of each listed block from the labels and its owning account, null when it has none', async () => {
     const items = (await ok('/api/blocks?limit=4')).items;
-    assert.deepEqual(items.map((b: any) => [b.number, b.author, b.authorLabel]), [
-      [120, ALICE_HEX, 'identitee-01'],
-      [119, BOB_HEX, null],
-      [118, ALICE_HEX, 'identitee-01'],
-      [117, BOB_HEX, null],
+    assert.deepEqual(items.map((b: any) => [b.number, b.author, b.authorLabel, b.authorAccount]), [
+      [120, ALICE_HEX, 'identitee-01', ALICE],
+      [119, BOB_HEX, null, null],
+      [118, ALICE_HEX, 'identitee-01', ALICE],
+      [117, BOB_HEX, null, null],
     ]);
     assert.equal(items[0].authoritySetId, 1);
     assert.ok(items[0].justificationSigners === null);
@@ -269,6 +270,7 @@ describe('blocks', () => {
     const b = await ok('/api/block/10');
     assert.equal(b.author, ALICE_HEX);
     assert.equal(b.authorLabel, 'identitee-01');
+    assert.equal(b.authorAccount, ALICE);
     assert.deepEqual(b.justificationSigners, [ALICE_HEX, BOB_HEX]);
     assert.deepEqual(b.signers, [{ key: ALICE_HEX, label: 'identitee-01' }, { key: BOB_HEX, label: null }]);
     assert.equal(b.authoritySetId, 0);
@@ -307,13 +309,15 @@ describe('blocks', () => {
       const r = await get('/api/block/10');
       assert.equal(r.status, 200);
       assert.equal(r.body.authorLabel, 'identitee-01');
+      assert.equal(r.body.authorAccount, null);
       assert.deepEqual(r.body.signers, [{ key: ALICE_HEX, label: 'identitee-01' }, { key: BOB_HEX, label: null }]);
       assert.deepEqual(r.body.authoritySet, { id: 0, members: null });
       assert.equal(r.body.logs, null);
       assert.equal(r.body.extrinsics.length, 2);
       // an answer without its live parts is not kept by a cache
       assert.equal(r.headers.get('cache-control'), 'no-store');
-      assert.equal((await ok('/api/blocks?limit=2')).items[0].authorLabel, 'identitee-01');
+      const listed = (await ok('/api/blocks?limit=2')).items[0];
+      assert.deepEqual([listed.authorLabel, listed.authorAccount], ['identitee-01', null]);
     } finally {
       live.up = true;
     }
@@ -340,6 +344,13 @@ describe('blocks', () => {
       live.failMembers = false;
     }
     assert.match((await get('/api/block/10')).headers.get('cache-control') ?? '', /max-age=300/);
+  });
+
+  it('does not let a cache keep a block whose author owns no account yet', async () => {
+    const r = await get('/api/block/119');
+    assert.equal(r.body.author, BOB_HEX);
+    assert.equal(r.body.authorAccount, null);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
   });
 
   it('gives up on a node that does not answer within the live timeout', async () => {
@@ -622,7 +633,7 @@ describe('http', () => {
 
   it('varies on Origin on every answer, cacheable ones included', async () => {
     for (const init of [{}, { headers: { origin: DEFAULT_ORIGIN } }, { headers: { origin: 'https://example.com' } }]) {
-      const block = await get('/api/block/3', init);
+      const block = await get('/api/block/10', init);
       assert.match(block.headers.get('cache-control') ?? '', /max-age/);
       assert.equal(block.headers.get('vary'), 'Origin');
       assert.equal((await get('/api/extrinsic/3-1', init)).headers.get('vary'), 'Origin');

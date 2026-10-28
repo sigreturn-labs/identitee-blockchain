@@ -67,6 +67,8 @@ export interface Live {
   roles(address: string): Promise<state.Roles>;
   authorities(): Promise<state.AuthorityState[]>;
   validators(): Promise<state.Validators>;
+  /** The account (SS58) owning an Aura key (lowercase hex), null if none. */
+  auraKeyOwner(key: string): Promise<string | null>;
   health(): Promise<state.Health>;
   /** The owner of a username (SS58), null if nobody holds it. */
   nameOwner(name: string): Promise<string | null>;
@@ -104,6 +106,7 @@ export const OFFLINE: Live = {
   roles: down,
   authorities: down,
   validators: down,
+  auraKeyOwner: down,
   health: down,
   nameOwner: down,
   runtime: () => null,
@@ -167,6 +170,7 @@ export function chainLive(api: ApiPromise, labels: Record<string, string>): Live
     roles: (address) => up(() => state.roles(api, address)),
     authorities: () => up(() => state.authorities(api)),
     validators: () => up(() => state.validators(api, labels)),
+    auraKeyOwner: (key) => up(() => state.auraKeyOwner(api, key)),
     health: () => up(() => state.health(api)),
     nameOwner: (name) =>
       up(async () => {
@@ -524,9 +528,18 @@ export class ExplorerApi {
     return keys.map((key) => ({ key, label: this.label(key) }));
   }
 
-  private blocks(cursor: number | null, limit: number): { items: Array<BlockRow & { authorLabel: string | null }>; next: number | null } {
+  /** The account owning each Aura key of `keys`; a key without one, or that the node cannot answer
+   * for, is left out. */
+  private async owners(keys: Array<string | null>): Promise<Map<string, string>> {
+    const unique = [...new Set(keys.filter((k): k is string => k !== null))];
+    const found = await Promise.all(unique.map((k) => this.orNull((l) => l.auraKeyOwner(k))));
+    return new Map(unique.flatMap((k, i) => (found[i] ? [[k, found[i]!] as [string, string]] : [])));
+  }
+
+  private async blocks(cursor: number | null, limit: number): Promise<{ items: Array<BlockRow & { authorLabel: string | null; authorAccount: string | null }>; next: number | null }> {
     const p = this.store.blocks(cursor, limit);
-    return { items: p.items.map((b) => ({ ...b, authorLabel: this.label(b.author) })), next: p.next };
+    const owners = await this.owners(p.items.map((b) => b.author));
+    return { items: p.items.map((b) => ({ ...b, authorLabel: this.label(b.author), authorAccount: (b.author && owners.get(b.author)) ?? null })), next: p.next };
   }
 
   /** The block with the labels of its keys, and what only the node can read at it (digest logs, GRANDPA members) or null. */
@@ -534,10 +547,16 @@ export class ExplorerApi {
     const key = blockId(id);
     const b = this.store.block(key);
     if (b === null) throw notFound();
-    const [logs, members] = await Promise.all([this.orNull((l) => l.blockLogs(b.hash)), this.orNull((l) => l.grandpaAuthorities(b.hash))]);
+    const [logs, members, owners] = await Promise.all([
+      this.orNull((l) => l.blockLogs(b.hash)),
+      this.orNull((l) => l.grandpaAuthorities(b.hash)),
+      this.owners([b.author]),
+    ]);
+    const authorAccount = (b.author && owners.get(b.author)) ?? null;
     const out = {
       ...b,
       authorLabel: this.label(b.author),
+      authorAccount,
       signers: b.justificationSigners === null ? null : this.named(b.justificationSigners),
       authoritySet: { id: b.authoritySetId, members: members === null ? null : this.named(members) },
       logs,
@@ -545,7 +564,8 @@ export class ExplorerApi {
       events: this.store.eventsOfBlock(b.number).map((e) => ({ ...e, timestamp: b.timestamp })),
     };
     // a finalized block never changes, but an answer missing its live parts must not be cached as if it were whole
-    return logs === null || members === null ? new Uncached(out) : out;
+    // nor one whose author's account is unknown: the node may have been away, or the key not yet owned
+    return logs === null || members === null || (b.author !== null && authorAccount === null) ? new Uncached(out) : out;
   }
 
   private extrinsic(id: string): unknown {

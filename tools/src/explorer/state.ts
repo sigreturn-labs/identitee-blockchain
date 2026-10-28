@@ -12,6 +12,8 @@ import { SS58_PREFIX, toJson } from './decode.ts';
 type Json = any;
 
 const TTL_MS = 6000;
+/** `aura` as a session key type id. */
+const AURA_KEY_TYPE = '0x61757261';
 
 /** Capability bits of an agent (pallets/identitee/src/types.rs, `Capabilities`). */
 export const CAPABILITIES: ReadonlyArray<[number, string]> = [
@@ -181,6 +183,17 @@ export function validators(api: ApiPromise, labels: Record<string, string> = {})
 function findLabel(labels: Record<string, string>, key: string): string | null {
   for (const [k, v] of Object.entries(labels)) if (k.toLowerCase() === key) return v;
   return null;
+}
+
+/** The account (SS58) owning an Aura key (lowercase hex) at the finalized head, null if none:
+ * session's `KeyOwner`, which a validator's keys enter when it is added. */
+export function auraKeyOwner(api: ApiPromise, key: string): Promise<string | null> {
+  return cached(api, `owner:${key}`, async () => {
+    const at = await head(api);
+    if (at.query.session?.keyOwner === undefined) return null;
+    const owner = toJson(await at.query.session.keyOwner([AURA_KEY_TYPE, key]));
+    return typeof owner === 'string' ? encodeAddress(decodeAddress(owner), SS58_PREFIX) : null;
+  });
 }
 
 /** The GRANDPA authority keys (lowercase hex) in the state at `blockHash`; needs a node that keeps that state. */

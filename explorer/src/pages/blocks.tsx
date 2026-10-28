@@ -16,7 +16,7 @@ export function Blocks() {
         columns={[
           { label: "Block", cell: (b) => <BlockLink n={b.number} /> },
           { label: "Age", cell: (b) => <Age ms={b.timestamp} now={now} /> },
-          { label: "Produced by", cell: (b) => <Producer author={b.author} label={b.authorLabel} /> },
+          { label: "Produced by", cell: (b) => <Producer author={b.author} label={b.authorLabel} account={b.authorAccount} /> },
           { label: "Extrinsics", cell: (b) => formatNumber(b.extrinsicCount), class: "x-end" },
           { label: "Events", cell: (b) => formatNumber(b.eventCount), class: "x-end" },
           {

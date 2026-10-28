@@ -2,6 +2,7 @@
 import type { ComponentChildren } from "preact";
 import type { BlockDetail, LabelledKey } from "../api.ts";
 import { formatNumber, shortHash } from "../format.ts";
+import { AccountLink } from "./table.tsx";
 
 /** A page title for a block id: its number, or the edges of its hash. */
 export const blockTitle = (id: string): string => (/^\d+$/.test(id) ? formatNumber(Number(id)) : shortHash(id));
@@ -16,9 +17,18 @@ export const Row = ({ label, children }: { label: string; children: ComponentChi
 /** A key by its label, else by the edges of the key. */
 export const keyName = (k: LabelledKey): string => k.label ?? shortHash(k.key);
 
-/** The producer of a block: its label, else the edges of its Aura key. */
-export const Producer = ({ author, label }: { author: string | null; label: string | null }) =>
-  label !== null ? <>{label}</> : author !== null ? <span title={author}>{shortHash(author)}</span> : <span class="x-quiet">Unknown</span>;
+/** The producer of a block: the account owning its Aura key (by its username or display name, as
+ * any account link), else its label, else the edges of the key. */
+export const Producer = ({ author, label, account }: { author: string | null; label: string | null; account: string | null }) =>
+  account !== null ? (
+    <AccountLink address={account} />
+  ) : label !== null ? (
+    <>{label}</>
+  ) : author !== null ? (
+    <span title={author}>{shortHash(author)}</span>
+  ) : (
+    <span class="x-quiet">Unknown</span>
+  );
 
 /** Who finalized the block: the signers of its justification when it carries one, else the
  * GRANDPA set that was in charge (with its members when the node could read them). */

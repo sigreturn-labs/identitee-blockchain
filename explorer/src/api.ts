@@ -159,8 +159,9 @@ export type Call = { pallet: string; method: string; args: unknown };
 export type EventRow = { id: string; block: number; index: number; extrinsicIndex: number | null; pallet: string; method: string; data: unknown; sentence: string | null };
 export type ExtrinsicFull = Omit<ExtrinsicSummary, "inner"> & { args: unknown } & Ts & { events: Array<EventRow & Ts> };
 
-/** A list row of /api/blocks: the producer's label comes from the explorer's label file. */
-export type BlockItem = BlockRow & { authorLabel: string | null };
+/** A list row of /api/blocks: the producer's label comes from the explorer's label file, its account
+ * from the chain (null when its key has no owner or the node is away). */
+export type BlockItem = BlockRow & { authorLabel: string | null; authorAccount: string | null };
 export type LabelledKey = { key: string; label: string | null };
 export type DigestLog = { type: string; engine: string | null; data: string };
 export type BlockDetail = BlockItem & {
