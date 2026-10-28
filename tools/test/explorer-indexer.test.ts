@@ -8,8 +8,10 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import type { ApiPromise } from '@polkadot/api';
+import { hexToU8a, u8aConcat } from '@polkadot/util';
 import { blake2AsHex } from '@polkadot/util-crypto';
 
+import { AURA_AUTHORITIES_KEY } from '../src/explorer/decode.ts';
 import { callArgs, ChainChangedError, feedRow, Indexer, truncateLarge } from '../src/explorer/indexer.ts';
 import { main } from '../src/explorer/main.ts';
 import { ExplorerStore } from '../src/explorer/store.ts';
@@ -152,6 +154,36 @@ async function until(what: string, probe: () => boolean): Promise<void> {
 const numbers = (store: ExplorerStore): number[] => store.blocks(null, 100).items.map((b) => b.number);
 
 describe('Indexer', () => {
+  it('names the Aura author from the raw authorities at the parent', async () => {
+    const chain = fakeChain(2);
+    const keys = [`0x${'aa'.repeat(32)}`, `0x${'bb'.repeat(32)}`];
+    const asked: Array<[string, string]> = [];
+    const api = chain.api as any;
+    // Slot 7 in block 2's Aura pre-runtime digest: the author is keys[7 % 2].
+    const slot = new Uint8Array(8);
+    new DataView(slot.buffer).setBigUint64(0, 7n, true);
+    const pre = { isPreRuntime: true, asPreRuntime: [{ isAura: true }, slot] };
+    const getBlock = api.rpc.chain.getBlock;
+    api.rpc.chain.getBlock = async (h: { toHex(): string }) => {
+      const block = await getBlock(h);
+      const n = block.block.header.number.toNumber();
+      return n === 2 ? { ...block, block: { ...block.block, header: { ...block.block.header, digest: { logs: [pre] } } } } : block;
+    };
+    api.rpc.state = {
+      getStorage: async (key: string, at: { toHex(): string }) => {
+        asked.push([key, at.toHex()]);
+        const bytes = u8aConcat([0x08], hexToU8a(keys[0]), hexToU8a(keys[1]));
+        return { isSome: true, unwrap: () => ({ toU8a: () => bytes }) };
+      },
+    };
+    const store = new ExplorerStore(':memory:');
+    const indexer = new Indexer(chain.api, store, quiet().log);
+    await indexer.start();
+    assert.equal(store.block(2)!.author, keys[1]);
+    assert.deepEqual(asked, [[AURA_AUTHORITIES_KEY, hashOf(1)]]);
+    await indexer.stop();
+  });
+
   it('catches up with the finalized head, block by block in order', async () => {
     const chain = fakeChain(4);
     const store = new ExplorerStore(':memory:');

@@ -22,8 +22,8 @@ import {
 } from '@polkadot/types';
 import type { Call, DigestItem, Event, GrandpaJustification } from '@polkadot/types/interfaces';
 import type { Codec, Registry } from '@polkadot/types/types';
-import { u8aToHex } from '@polkadot/util';
-import { encodeAddress } from '@polkadot/util-crypto';
+import { compactFromU8a, u8aToHex } from '@polkadot/util';
+import { encodeAddress, xxhashAsHex } from '@polkadot/util-crypto';
 
 export const SS58_PREFIX = 2426;
 
@@ -36,6 +36,21 @@ export function auraSlot(digestLogs: DigestItem[]): bigint | null {
     return new DataView(data.buffer, data.byteOffset, 8).getBigUint64(0, true);
   }
   return null;
+}
+
+/** Storage key of `Aura::Authorities`: `twox128("Aura") ++ twox128("Authorities")`. */
+export const AURA_AUTHORITIES_KEY = `${xxhashAsHex('Aura', 128)}${xxhashAsHex('Authorities', 128).slice(2)}`;
+
+/**
+ * The keys (hex) of a raw `Aura::Authorities` value: a SCALE vector of 32-byte public keys. Read raw
+ * because the type is the same in every runtime, while the metadata-driven decoding mixes up the
+ * two runtimes around the block of an upgrade. Throws on a value of the wrong length.
+ */
+export function auraAuthorityKeys(raw: Uint8Array): string[] {
+  const [offset, length] = compactFromU8a(raw);
+  const count = length.toNumber();
+  if (raw.length !== offset + 32 * count) throw new Error(`auraAuthorityKeys: ${raw.length} bytes for ${count} keys`);
+  return Array.from({ length: count }, (_, i) => u8aToHex(raw.subarray(offset + 32 * i, offset + 32 * (i + 1))));
 }
 
 /** The Aura author of a slot: the authorities take turns. Throws if there are none. */

@@ -8,12 +8,14 @@ import { describe, it } from 'node:test';
 import { Keyring } from '@polkadot/keyring';
 import { Metadata, TypeRegistry } from '@polkadot/types';
 import type { Call, DigestItem, Event } from '@polkadot/types/interfaces';
-import { u8aConcat, u8aToHex } from '@polkadot/util';
+import { hexToU8a, u8aConcat, u8aToHex } from '@polkadot/util';
 import { cryptoWaitReady, encodeAddress } from '@polkadot/util-crypto';
 
 import {
   accountsIn,
+  AURA_AUTHORITIES_KEY,
   auraAuthor,
+  auraAuthorityKeys,
   auraSlot,
   eventData,
   justificationSigners,
@@ -88,6 +90,24 @@ describe('aura', () => {
 
   it('refuses an empty authority set', () => {
     assert.throws(() => auraAuthor(7n, []), /no Aura authorities/);
+  });
+});
+
+describe('auraAuthorityKeys', () => {
+  const a = `0x${'aa'.repeat(32)}`;
+  const b = `0x${'bb'.repeat(32)}`;
+
+  it('reads the keys of a raw Aura::Authorities value', () => {
+    assert.deepEqual(auraAuthorityKeys(u8aConcat([0x08], hexToU8a(a), hexToU8a(b))), [a, b]);
+    assert.deepEqual(auraAuthorityKeys(new Uint8Array([0x00])), []);
+  });
+
+  it('refuses a value whose length does not match its count', () => {
+    assert.throws(() => auraAuthorityKeys(u8aConcat([0x08], hexToU8a(a))), /33 bytes for 2 keys/);
+  });
+
+  it('uses the storage key of Aura::Authorities', () => {
+    assert.equal(AURA_AUTHORITIES_KEY, '0x57f8dc2f5ab09467896f47300f0424385e0621c4869aa60c02be9adcc98a0d1d');
   });
 });
 

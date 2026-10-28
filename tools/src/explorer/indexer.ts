@@ -10,7 +10,18 @@ import { hexToU8a, isHex, u8aToString } from '@polkadot/util';
 import { blake2AsHex } from '@polkadot/util-crypto';
 
 import type { Logger } from '../migrator.ts';
-import { accountsIn, auraAuthor, auraSlot, eventData, justificationSigners, toJson, walkCall, type WalkedCall } from './decode.ts';
+import {
+  accountsIn,
+  AURA_AUTHORITIES_KEY,
+  auraAuthor,
+  auraAuthorityKeys,
+  auraSlot,
+  eventData,
+  justificationSigners,
+  toJson,
+  walkCall,
+  type WalkedCall,
+} from './decode.ts';
 import { sentence } from './sentences.ts';
 import type {
   AccountLink,
@@ -406,8 +417,9 @@ export class Indexer {
     let author: string | null = null;
     const slot = auraSlot(header.digest.logs);
     if (slot !== null && n > 0) {
-      const parent = await api.at(header.parentHash);
-      const keys = ((await (parent.query as Json).aura.authorities()) as Codec[]).map(lower);
+      // The authorities at the parent, read raw: see `auraAuthorityKeys`.
+      const raw = (await api.rpc.state.getStorage(AURA_AUTHORITIES_KEY, header.parentHash)) as Json;
+      const keys = raw.isSome ? auraAuthorityKeys(raw.unwrap().toU8a(true)) : [];
       if (keys.length > 0) author = auraAuthor(slot, keys);
     }
 
