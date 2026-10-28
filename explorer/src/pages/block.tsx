@@ -1,3 +1,4 @@
+import { useEffect, useState } from "preact/hooks";
 import { useRoute } from "preact-iso";
 import { knownHeight, type BlockDetail } from "../api.ts";
 import { useApi, useHead } from "../data.ts";
@@ -10,13 +11,16 @@ import { extrinsicColumns } from "./extrinsics.tsx";
 export function Block() {
   const { params } = useRoute();
   const id = params.id ?? "";
-  const { data, error, reload } = useApi<BlockDetail>(`/api/block/${encodeURIComponent(id)}`);
   const head = useHead();
+  // a block above the index is read again with every head, until the index holds it
+  const [following, setFollowing] = useState(false);
+  const { data, error, reload } = useApi<BlockDetail>(`/api/block/${encodeURIComponent(id)}`, following && head !== null ? `${head.best}/${head.finalized}/${head.indexed}` : 0);
+  useEffect(() => setFollowing(data !== null && !data.indexed), [data]);
   const now = useNow();
   // unknown until the head is read, and while the node is away (the API then answers null): the row
   // says so rather than naming signers of a block that may not be final
   const finalized = knownHeight(head?.finalized);
-  const top = head === null ? null : (head.indexed ?? knownHeight(head.best));
+  const top = head === null ? null : (knownHeight(head.best) ?? head.indexed);
 
   return (
     <section class="x-page">
@@ -67,15 +71,17 @@ export function Block() {
               </a>
             )}
           </nav>
-          <Section title={`Extrinsics (${formatNumber(data.extrinsics.length)})`} label="Extrinsics">
-            {data.extrinsics.length === 0 ? (
+          <Section title={`Extrinsics (${formatNumber(data.indexed ? data.extrinsics.length : data.extrinsicCount)})`} label="Extrinsics">
+            {!data.indexed ? (
+              <Empty>Listed once the block is finalized.</Empty>
+            ) : data.extrinsics.length === 0 ? (
               <Empty>No extrinsics in this block.</Empty>
             ) : (
               <Table label="Extrinsics of the block" rows={data.extrinsics} rowKey={(x) => x.id} columns={extrinsicColumns(now, false)} />
             )}
           </Section>
-          <Section title={`Events (${formatNumber(data.events.length)})`} label="Events">
-            {data.events.length === 0 ? <Empty>No events in this block.</Empty> : <Table label="Events of the block" rows={data.events} rowKey={(e) => e.id} columns={eventColumns(now, false)} />}
+          <Section title={data.indexed ? `Events (${formatNumber(data.events.length)})` : "Events"} label="Events">
+            {!data.indexed ? <Empty>Listed once the block is finalized.</Empty> : data.events.length === 0 ? <Empty>No events in this block.</Empty> : <Table label="Events of the block" rows={data.events} rowKey={(e) => e.id} columns={eventColumns(now, false)} />}
           </Section>
           <Section title="Digest logs">
             {data.logs === null ? (

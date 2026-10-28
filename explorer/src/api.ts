@@ -133,10 +133,12 @@ export type BlockRow = {
   timestamp: number | null;
   specVersion: number;
   author: string | null;
-  authoritySetId: number;
+  /** Null for a block above the index, read at the node. */
+  authoritySetId: number | null;
   justificationSigners: string[] | null;
   extrinsicCount: number;
-  eventCount: number;
+  /** Null for a block above the index, read at the node. */
+  eventCount: number | null;
 };
 
 export type ModuleError = { pallet: string; name: string; docs: string };
@@ -161,14 +163,17 @@ export type ExtrinsicFull = Omit<ExtrinsicSummary, "inner"> & { args: unknown } 
 
 /** A list row of /api/blocks: the producer's label comes from the explorer's label file, its account
  * from the chain (null when its key has no owner or the node is away). */
-export type BlockItem = BlockRow & { authorLabel: string | null; authorAccount: string | null };
+export type BlockItem = BlockRow & { authorLabel: string | null; authorAccount: string | null; finalized: boolean };
 export type LabelledKey = { key: string; label: string | null };
 export type DigestLog = { type: string; engine: string | null; data: string };
 export type BlockDetail = BlockItem & {
   /** The GRANDPA signers of its justification, null without one. */
   signers: LabelledKey[] | null;
-  /** The set in charge at that block; `members` is null when the node cannot read them. */
-  authoritySet: { id: number; members: LabelledKey[] | null };
+  /** The set in charge at that block; `members` is null when the node cannot read them. Null for a
+   * block above the index. */
+  authoritySet: { id: number; members: LabelledKey[] | null } | null;
+  /** False for a block above the index, read at the node: its extrinsics and events are not listed yet. */
+  indexed: boolean;
   /** Null when the node is unreachable. */
   logs: DigestLog[] | null;
   extrinsics: Array<ExtrinsicSummary & Ts>;

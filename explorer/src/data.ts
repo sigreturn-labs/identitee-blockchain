@@ -44,8 +44,9 @@ export type Paged<T> = {
 };
 
 /** A list read page by page: `base` (which may carry its own query) with `limit`, then the cursor
- * of the previous page. */
-export function usePaged<T>(base: string, limit = 25): Paged<T> {
+ * of the previous page. A new `version` reads the first page again in place, unless more pages were
+ * loaded: the list does not move under someone reading further down. */
+export function usePaged<T>(base: string, limit = 25, version: unknown = 0): Paged<T> {
   const join = base.includes("?") ? "&" : "?";
   const first = `${base}${join}limit=${limit}`;
   const [attempt, setAttempt] = useState(0);
@@ -57,8 +58,11 @@ export function usePaged<T>(base: string, limit = 25): Paged<T> {
     loadingMore: false,
   });
   const ticket = useRef(0);
+  const loadedMore = useRef(false);
+  const seenVersion = useRef(version);
   useEffect(() => {
     const mine = ++ticket.current;
+    loadedMore.current = false;
     setState({ items: null, next: null, error: null, moreError: null, loadingMore: false });
     get<Page<T, string | number>>(first).then(
       (p) => mine === ticket.current && setState({ items: p.items, next: p.next === null ? null : String(p.next), error: null, moreError: null, loadingMore: false }),
@@ -68,8 +72,19 @@ export function usePaged<T>(base: string, limit = 25): Paged<T> {
       ticket.current++;
     };
   }, [first, attempt]);
+  useEffect(() => {
+    if (Object.is(seenVersion.current, version)) return;
+    seenVersion.current = version;
+    if (loadedMore.current) return;
+    const mine = ticket.current;
+    get<Page<T, string | number>>(first).then(
+      (p) => mine === ticket.current && !loadedMore.current && setState((s) => ({ ...s, items: p.items, next: p.next === null ? null : String(p.next), error: null })),
+      () => {}, // the list on screen stays; the next version tries again
+    );
+  }, [version, first]);
   const more = () => {
     if (state.next === null || state.loadingMore) return;
+    loadedMore.current = true;
     const mine = ticket.current;
     setState((s) => ({ ...s, loadingMore: true, moreError: null }));
     get<Page<T, string | number>>(`${first}&cursor=${encodeURIComponent(state.next)}`).then(

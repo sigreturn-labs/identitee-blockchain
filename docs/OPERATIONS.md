@@ -392,7 +392,9 @@ attestations, migrations, usernames, runtime and network. It has two parts:
 
 - `identitee-explorer`, on the server (`tools/src/explorer/`): one process that indexes the finalized
   blocks of the local node into SQLite and serves them as a read-only JSON API, plus a stream of the
-  heads (Server-Sent Events). Endpoints and options: [tools/README.md](../tools/README.md).
+  heads (Server-Sent Events). Above the index, the block lists and block pages read the node's best
+  chain, marked not finalized; their extrinsics and events are listed once the index holds them.
+  Endpoints and options: [tools/README.md](../tools/README.md).
 - The front (`explorer/`), a static site on Cloudflare Pages that reads the API from the browser
   ([explorer/README.md](../explorer/README.md)).
 
@@ -441,7 +443,9 @@ other users, as it already is for the node's chain spec; only `secrets/` is 700:
 }
 ```
 
-Without it blocks show the bare key. The file is read at startup, and a restart applies a change. The
+Blocks show the account that owns their producer's Aura key (by its username or display name), read
+from the chain; a label names a key no account owns, and without one such blocks show the bare key.
+The file is read at startup, and a restart applies a change. The
 service refuses to start, and says why, if the file is not valid JSON, if a key is not 32 bytes of
 hexadecimal, or if a label is empty or too long. Keys and labels are public; keep the file out of the
 repository.

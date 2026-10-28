@@ -105,9 +105,11 @@ const LOGS = [
   { type: 'Seal', engine: 'aura', data: `0x${'11'.repeat(64)}` },
 ];
 
-function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boolean; hang: boolean; reads: string[] } {
+function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boolean; hang: boolean; reads: string[]; recent: boolean } {
   const f = {
     up: true,
+    /** The node's best chain goes on above the index, to LAST + 2 (else it has nothing there). */
+    recent: false,
     failLogs: false,
     failMembers: false,
     hang: false,
@@ -123,6 +125,13 @@ function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boole
     authorities: () => f.guard(AUTHORITIES),
     validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01' }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01' }], setId: 0 }),
     auraKeyOwner: (key: string) => f.guard(key === ALICE_HEX ? ALICE : null),
+    recentBlocks: (from: number, to: number) => {
+      const list = [];
+      for (let n = Math.min(to, f.recent ? LAST + 2 : LAST); n >= from; n--) {
+        list.push({ number: n, hash: hash(0x30, n), parentHash: hash(0x30, n - 1), stateRoot: hash(0x31, n), extrinsicsRoot: hash(0x32, n), timestamp: T0 + n * 6000, specVersion: 2, author: n % 2 === 0 ? ALICE_HEX : BOB_HEX, extrinsicCount: 1 });
+      }
+      return f.guard(list);
+    },
     health: () => f.guard({ peers: 2, isSyncing: false, shouldHavePeers: true }),
     nameOwner: (name: string) => f.guard(name === 'alice' ? ALICE : name === '010' ? BOB : null),
     blockLogs(blockHash: string) {
@@ -301,6 +310,49 @@ describe('blocks', () => {
     } finally {
       await mixed.close();
     }
+  });
+
+  it('starts the first page with the best chain above the index, marked by whether it is final', async () => {
+    live.recent = true;
+    try {
+      const items = (await ok('/api/blocks?limit=4')).items;
+      assert.deepEqual(items.map((b: any) => [b.number, b.finalized, b.authorAccount]), [
+        [122, false, ALICE],
+        [121, false, null],
+        [120, true, ALICE],
+        [119, true, null],
+      ]);
+      // what only the index knows
+      assert.deepEqual([items[0].eventCount, items[0].authoritySetId, items[0].justificationSigners], [null, null, null]);
+      assert.equal(typeof items[2].eventCount, 'number');
+      assert.equal(items[0].hash, hash(0x30, 122));
+      assert.equal(items[0].authorLabel, 'identitee-01');
+      // a later page is the index alone
+      assert.deepEqual((await ok('/api/blocks?limit=2&cursor=119')).items.map((b: any) => b.number), [118, 117]);
+      heads.fire({ best: LAST + 2, finalized: LAST + 1 });
+      assert.deepEqual((await ok('/api/blocks?limit=4')).items.map((b: any) => b.finalized), [false, true, true, true]);
+    } finally {
+      heads.fire({ best: LAST + 2, finalized: LAST });
+      live.recent = false;
+    }
+  });
+
+  it('serves a block above the index from the node, not final and never cached, with its extrinsics left to the index', async () => {
+    live.recent = true;
+    try {
+      const r = await get('/api/block/122');
+      assert.equal(r.status, 200);
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+      assert.deepEqual([r.body.number, r.body.finalized, r.body.indexed, r.body.authorAccount, r.body.signers, r.body.authoritySet], [122, false, false, ALICE, null, null]);
+      assert.deepEqual([r.body.extrinsics, r.body.events, r.body.extrinsicCount], [[], [], 1]);
+      assert.deepEqual(r.body.logs, LOGS);
+      assert.equal((await get('/api/block/123')).status, 404);
+      // a hash is looked up in the index only
+      assert.equal((await get(`/api/block/${hash(0x30, 122)}`)).status, 404);
+    } finally {
+      live.recent = false;
+    }
+    assert.equal((await get('/api/block/122')).status, 404);
   });
 
   it('keeps the labels, and nulls what only the node knows, when the node is down', async () => {

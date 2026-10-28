@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { knownHeight, type BlockItem, type EventRow, type ExtrinsicSummary, type Page, type Stats, type Ts } from "../api.ts";
 import { useApi, useHead } from "../data.ts";
 import { formatNumber } from "../format.ts";
-import { Producer } from "../ui/fields.tsx";
+import { BlockCell, Producer } from "../ui/fields.tsx";
 import { AccountLink, Age, BlockLink, CallName, Empty, ErrorCard, Section, Skeleton, Table, useNow } from "../ui/table.tsx";
 
 /** A number that moves when the indexed head does, after the first one: the lists are read again
@@ -33,7 +33,8 @@ export function Home() {
   const version = useIndexVersion(head?.indexed);
   const now = useNow();
   const stats = useApi<Stats>("/api/stats", version);
-  const blocks = useApi<Page<BlockItem, number>>("/api/blocks?limit=10", version);
+  // the blocks follow every head, final or not; the other lists follow the index
+  const blocks = useApi<Page<BlockItem, number>>("/api/blocks?limit=10", head === null ? null : `${head.best}/${head.finalized}/${head.indexed}`);
   // the latest signed ones: most blocks hold only the timestamp inherent
   const extrinsics = useApi<Page<ExtrinsicSummary & Ts>>("/api/extrinsics?signed=1&limit=10", version);
   const events = useApi<Page<EventRow & Ts>>("/api/events?pallet=identitee&limit=10", version);
@@ -83,7 +84,7 @@ export function Home() {
                   rows={blocks.data.items}
                   rowKey={(b) => b.hash}
                   columns={[
-                    { label: "Block", cell: (b) => <BlockLink n={b.number} /> },
+                    { label: "Block", cell: (b) => <BlockCell block={b} /> },
                     { label: "Age", cell: (b) => <Age ms={b.timestamp} now={now} /> },
                     { label: "Produced by", cell: (b) => <Producer author={b.author} label={b.authorLabel} account={b.authorAccount} /> },
                     { label: "Extrinsics", cell: (b) => formatNumber(b.extrinsicCount), class: "x-end" },

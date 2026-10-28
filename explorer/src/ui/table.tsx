@@ -93,8 +93,23 @@ export function ErrorCard({ error, notFound, retry }: { error: ApiError; notFoun
 }
 
 /** A list read page by page: skeleton, error card, empty state, rows, then Load more. */
-export function PagedTable<T>({ path, label, columns, rowKey, empty }: { path: string; label: string; columns: Column<T>[]; rowKey: (row: T) => string; empty: string }) {
-  const list = usePaged<T>(path);
+export function PagedTable<T>({
+  path,
+  label,
+  columns,
+  rowKey,
+  empty,
+  version,
+}: {
+  path: string;
+  label: string;
+  columns: Column<T>[];
+  rowKey: (row: T) => string;
+  empty: string;
+  /** A new value reads the first page again (see `usePaged`). */
+  version?: unknown;
+}) {
+  const list = usePaged<T>(path, 25, version);
   return <PagedView list={list} label={label} columns={columns} rowKey={rowKey} empty={empty} />;
 }
 

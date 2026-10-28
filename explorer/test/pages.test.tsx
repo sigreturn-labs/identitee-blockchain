@@ -140,6 +140,18 @@ describe("Home", () => {
 });
 
 describe("Block", () => {
+  it("shows a block above the index as not final, its extrinsics and events left for later", async () => {
+    serve({
+      "/api/status": { ...status, best: 1241 },
+      "/api/block/1241": { ...block, number: 1241, finalized: false, indexed: false, eventCount: null, authoritySetId: null, extrinsicCount: 1, signers: null, authoritySet: null, extrinsics: [], events: [] },
+    });
+    open("/block/1241");
+    await waitFor(() => expect(row("Finalized by")).toBe("Not finalized yet"));
+    expect(text()).toContain("Extrinsics (1)");
+    expect(main().textContent?.match(/Listed once the block is finalized\./g)?.length).toBe(2);
+    expectClean();
+  });
+
   it("names its producer by the account owning its key, with the account's username", async () => {
     forgetIdentities();
     serve({ "/api/status": status, "/api/block/1236": { ...block, authorAccount: ALICE }, "/api/identities": { items: { [ALICE]: { display: "Alice", username: "alice", trust: null } } } });
@@ -333,6 +345,34 @@ describe("Account", () => {
 });
 
 describe("Lists", () => {
+  it("marks the blocks not final yet, and follows the heads in place until more is loaded", async () => {
+    const pending = (n: number) => ({ ...blocks.items[0]!, number: n, hash: `0xc${String(n).padStart(63, "0")}`, finalized: false, eventCount: null, authoritySetId: null });
+    const routes: Record<string, unknown> = {
+      "/api/status": { ...status, best: 1241 },
+      "/api/blocks?limit=25": { items: [pending(1241), ...blocks.items], next: 1237 },
+      "/api/blocks?limit=25&cursor=1237": { items: [{ ...blocks.items[2]!, number: 1237 }], next: null },
+    };
+    const asked = serve(routes);
+    open("/blocks");
+    const rowOf = (n: string) => [...main().querySelectorAll("tbody tr")].find((r) => r.textContent?.startsWith(n))?.textContent ?? "";
+    await waitFor(() => expect(rowOf("1,241")).toContain("Not finalized"));
+    expect(rowOf("1,241")).toContain("Pending");
+    expect(rowOf("1,240")).not.toContain("Not finalized");
+    // a new head: the first page is read again, without emptying the list meanwhile
+    routes["/api/blocks?limit=25"] = { items: [pending(1242), { ...pending(1241), finalized: true }, ...blocks.items], next: 1237 };
+    FakeEventSource.instances[0]!.emit("head", '{"best":1242,"finalized":1241,"indexed":1240}');
+    await waitFor(() => expect(rowOf("1,242")).toContain("Not finalized"));
+    expect(rowOf("1,241")).not.toContain("Not finalized");
+    // once older pages are loaded, a head no longer moves the list
+    [...main().querySelectorAll("button")].find((b) => b.textContent === "Load more")!.click();
+    await waitFor(() => expect(text()).toContain("1,237"));
+    const reads = asked.filter((p) => p === "/api/blocks?limit=25").length;
+    FakeEventSource.instances[0]!.emit("head", '{"best":1243,"finalized":1241,"indexed":1240}');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(asked.filter((p) => p === "/api/blocks?limit=25").length).toBe(reads);
+    expectClean();
+  });
+
   it("pages the blocks with Load more", async () => {
     const asked = serve({ "/api/status": status, "/api/blocks?limit=25": blocks, "/api/blocks?limit=25&cursor=1237": { items: [{ ...blocks.items[2]!, number: 1237, authorLabel: null }], next: null } });
     open("/blocks");

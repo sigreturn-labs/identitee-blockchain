@@ -69,6 +69,8 @@ export interface Live {
   validators(): Promise<state.Validators>;
   /** The account (SS58) owning an Aura key (lowercase hex), null if none. */
   auraKeyOwner(key: string): Promise<string | null>;
+  /** Blocks `from` to `to` of the node's best chain, the highest first, skipping any it lacks. */
+  recentBlocks(from: number, to: number): Promise<state.RecentBlock[]>;
   health(): Promise<state.Health>;
   /** The owner of a username (SS58), null if nobody holds it. */
   nameOwner(name: string): Promise<string | null>;
@@ -107,6 +109,7 @@ export const OFFLINE: Live = {
   authorities: down,
   validators: down,
   auraKeyOwner: down,
+  recentBlocks: down,
   health: down,
   nameOwner: down,
   runtime: () => null,
@@ -171,6 +174,11 @@ export function chainLive(api: ApiPromise, labels: Record<string, string>): Live
     authorities: () => up(() => state.authorities(api)),
     validators: () => up(() => state.validators(api, labels)),
     auraKeyOwner: (key) => up(() => state.auraKeyOwner(api, key)),
+    recentBlocks: (from, to) =>
+      up(async () => {
+        const all = await Promise.all(Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => state.recentBlock(api, to - i)));
+        return all.filter((b): b is state.RecentBlock => b !== null);
+      }),
     health: () => up(() => state.health(api)),
     nameOwner: (name) =>
       up(async () => {
@@ -536,17 +544,43 @@ export class ExplorerApi {
     return new Map(unique.flatMap((k, i) => (found[i] ? [[k, found[i]!] as [string, string]] : [])));
   }
 
-  private async blocks(cursor: number | null, limit: number): Promise<{ items: Array<BlockRow & { authorLabel: string | null; authorAccount: string | null }>; next: number | null }> {
-    const p = this.store.blocks(cursor, limit);
+  /** Indexed blocks are final; above them, the first page starts with the node's best chain. */
+  private async blocks(cursor: number | null, limit: number): Promise<{ items: unknown[]; next: number | null }> {
+    const recent = cursor === null ? await this.recent(limit) : [];
+    const p = this.store.blocks(cursor, Math.max(1, limit - recent.length));
     const owners = await this.owners(p.items.map((b) => b.author));
-    return { items: p.items.map((b) => ({ ...b, authorLabel: this.label(b.author), authorAccount: (b.author && owners.get(b.author)) ?? null })), next: p.next };
+    const indexed = p.items.map((b) => ({ ...b, finalized: true, authorLabel: this.label(b.author), authorAccount: (b.author && owners.get(b.author)) ?? null }));
+    return { items: [...recent, ...indexed], next: p.next };
+  }
+
+  /** The blocks of the best chain above the index, at most `limit`, as list rows: what only the
+   * index knows (events, GRANDPA set, signers) is null. None while the node is away. */
+  private async recent(limit: number): Promise<unknown[]> {
+    const { best, finalized } = this.headState();
+    const top = this.store.lastIndexed() ?? -1;
+    if (best === null || best <= top) return [];
+    const blocks = (await this.orNull((l) => l.recentBlocks(Math.max(top + 1, best - limit + 1), best))) ?? [];
+    const owners = await this.owners(blocks.map((b) => b.author));
+    return blocks.map((b) => this.recentRow(b, finalized, owners));
+  }
+
+  private recentRow(b: state.RecentBlock, finalized: number | null, owners: Map<string, string>) {
+    return {
+      ...b,
+      authoritySetId: null,
+      justificationSigners: null,
+      eventCount: null,
+      finalized: finalized !== null && b.number <= finalized,
+      authorLabel: this.label(b.author),
+      authorAccount: (b.author && owners.get(b.author)) ?? null,
+    };
   }
 
   /** The block with the labels of its keys, and what only the node can read at it (digest logs, GRANDPA members) or null. */
   private async block(id: string): Promise<unknown> {
     const key = blockId(id);
     const b = this.store.block(key);
-    if (b === null) throw notFound();
+    if (b === null) return this.recentBlock(key);
     const [logs, members, owners] = await Promise.all([
       this.orNull((l) => l.blockLogs(b.hash)),
       this.orNull((l) => l.grandpaAuthorities(b.hash)),
@@ -557,6 +591,8 @@ export class ExplorerApi {
       ...b,
       authorLabel: this.label(b.author),
       authorAccount,
+      finalized: true,
+      indexed: true,
       signers: b.justificationSigners === null ? null : this.named(b.justificationSigners),
       authoritySet: { id: b.authoritySetId, members: members === null ? null : this.named(members) },
       logs,
@@ -566,6 +602,25 @@ export class ExplorerApi {
     // a finalized block never changes, but an answer missing its live parts must not be cached as if it were whole
     // nor one whose author's account is unknown: the node may have been away, or the key not yet owned
     return logs === null || members === null || (b.author !== null && authorAccount === null) ? new Uncached(out) : out;
+  }
+
+  /** A block above the index, by number, read at the node: its extrinsics and events wait for the
+   * index, and the answer is never cached. */
+  private async recentBlock(key: number | string): Promise<unknown> {
+    const top = this.store.lastIndexed() ?? -1;
+    if (typeof key !== 'number' || key <= top) throw notFound();
+    const [found] = (await this.orNull((l) => l.recentBlocks(key, key))) ?? [];
+    if (found === undefined) throw notFound();
+    const [owners, logs] = await Promise.all([this.owners([found.author]), this.orNull((l) => l.blockLogs(found.hash))]);
+    return new Uncached({
+      ...this.recentRow(found, this.headState().finalized, owners),
+      indexed: false,
+      signers: null,
+      authoritySet: null,
+      logs,
+      extrinsics: [],
+      events: [],
+    });
   }
 
   private extrinsic(id: string): unknown {

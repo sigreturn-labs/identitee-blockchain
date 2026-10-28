@@ -7,7 +7,7 @@ import type { Codec } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
 import { decodeAddress, encodeAddress } from '@polkadot/util-crypto';
 
-import { SS58_PREFIX, toJson } from './decode.ts';
+import { AURA_AUTHORITIES_KEY, auraAuthor, auraAuthorityKeys, auraSlot, SS58_PREFIX, toJson } from './decode.ts';
 
 type Json = any;
 
@@ -193,6 +193,52 @@ export function auraKeyOwner(api: ApiPromise, key: string): Promise<string | nul
     if (at.query.session?.keyOwner === undefined) return null;
     const owner = toJson(await at.query.session.keyOwner([AURA_KEY_TYPE, key]));
     return typeof owner === 'string' ? encodeAddress(decodeAddress(owner), SS58_PREFIX) : null;
+  });
+}
+
+/** A block of the best chain that the index does not hold yet (not finalized, or not indexed yet),
+ * as its header and body say. Its time is the start of its Aura slot. */
+export interface RecentBlock {
+  number: number;
+  hash: string;
+  parentHash: string;
+  stateRoot: string;
+  extrinsicsRoot: string;
+  timestamp: number | null;
+  specVersion: number;
+  author: string | null;
+  extrinsicCount: number;
+}
+
+/** Block `n` of the node's best chain, null if it has none: re-read every 6 s, as the best chain can
+ * change below the finalized head. */
+export function recentBlock(api: ApiPromise, n: number): Promise<RecentBlock | null> {
+  return cached(api, `recent:${n}`, async () => {
+    const hash = (await api.rpc.chain.getBlockHash(n)) as Json;
+    if (hash.isEmpty) return null;
+    const [signed, version] = (await Promise.all([api.rpc.chain.getBlock(hash), api.rpc.state.getRuntimeVersion(hash)])) as [Json, Json];
+    const header = signed.block.header;
+    const slot = auraSlot(header.digest.logs);
+    let author: string | null = null;
+    if (slot !== null && n > 0) {
+      // the authorities at the parent, read raw: see `auraAuthorityKeys`
+      const raw = (await api.rpc.state.getStorage(AURA_AUTHORITIES_KEY, header.parentHash)) as Json;
+      const keys = raw.isSome ? auraAuthorityKeys(raw.unwrap().toU8a(true)) : [];
+      if (keys.length > 0) author = auraAuthor(slot, keys);
+    }
+    // Aura slots last twice the timestamp's minimum period
+    const period = (api.consts as Json).timestamp?.minimumPeriod;
+    return {
+      number: n,
+      hash: hash.toHex(),
+      parentHash: header.parentHash.toHex(),
+      stateRoot: header.stateRoot.toHex(),
+      extrinsicsRoot: header.extrinsicsRoot.toHex(),
+      timestamp: slot !== null && period !== undefined ? Number(slot) * 2 * Number(period.toString()) : null,
+      specVersion: version.specVersion.toNumber(),
+      author,
+      extrinsicCount: signed.block.extrinsics.length,
+    };
   });
 }
 
