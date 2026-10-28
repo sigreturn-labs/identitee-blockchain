@@ -46,7 +46,8 @@ export interface IdentitySummary {
 
 export interface Roles {
   sudo: boolean;
-  /** An Aura or GRANDPA key of the current set. */
+  /** In the validator list (pallet validators); on a runtime without it, an Aura or GRANDPA key of
+   * the current set. */
   validator: boolean;
   /** The authority this account is an agent of (an account serves at most one). */
   agent: Array<{ authority: number; name: string | null; capabilities: number; capabilityNames: string[] }>;
@@ -144,7 +145,12 @@ export function roles(api: ApiPromise, address: string): Promise<Roles> {
   const key = publicKey(address);
   return cached(api, `roles:${key}`, async () => {
     const at = await head(api);
-    const [sudo, agent, set] = (await Promise.all([at.query.sudo.key(), at.query.identitee.agents(key), validators(api)])) as [Codec, Codec, Validators];
+    const [sudo, agent, set, listed] = (await Promise.all([
+      at.query.sudo.key(),
+      at.query.identitee.agents(key),
+      validators(api),
+      at.query.validators?.validators === undefined ? null : at.query.validators.validators(),
+    ])) as [Codec, Codec, Validators, Codec | null];
     const sudoKey = toJson(sudo);
     const row = toJson(agent) as [number, number] | null;
     const list: Roles['agent'] = [];
@@ -154,7 +160,10 @@ export function roles(api: ApiPromise, address: string): Promise<Roles> {
     }
     return {
       sudo: typeof sudoKey === 'string' && publicKey(sudoKey) === key,
-      validator: set.aura.some((v) => v.key === key) || set.grandpa.some((v) => v.key === key),
+      validator:
+        listed === null
+          ? set.aura.some((v) => v.key === key) || set.grandpa.some((v) => v.key === key)
+          : (toJson(listed) as string[]).some((account) => publicKey(account) === key),
       agent: list,
     };
   });
