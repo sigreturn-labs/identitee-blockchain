@@ -72,7 +72,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: alloc::borrow::Cow::Borrowed("identitee"),
 	authoring_version: 1,
 	// Bumped with every runtime upgrade, so nodes and clients see that the logic changed.
-	spec_version: 10,
+	spec_version: 11,
 	impl_version: 1,
 	apis: apis::RUNTIME_API_VERSIONS,
 	transaction_version: 1,

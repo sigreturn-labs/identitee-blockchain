@@ -70,6 +70,9 @@ substrate-build-script-utils = { workspace = true, default-features = true }
 [features]
 default = ["std"]
 std = ["identitee-runtime/std"]
+# Embed the metadata hash in the runtime, for wallets that sign with it (CheckMetadataHash mode 1).
+# Release builds use it.
+metadata-hash = ["identitee-runtime/metadata-hash"]
 # Needed only when building the node with runtime benchmarks.
 runtime-benchmarks = [
 	"frame-benchmarking-cli/runtime-benchmarks",

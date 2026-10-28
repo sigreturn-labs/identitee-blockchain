@@ -52,7 +52,7 @@ jobs:
         run: rustup show active-toolchain
 
       - name: Build
-        run: cargo build --locked --release -p identitee-node
+        run: cargo build --locked --release -p identitee-node --features metadata-hash
 
       - name: Check the binary
         run: |

@@ -58,7 +58,8 @@ The script:
   `identitee-node --version` carries the commit hash, which says nothing of uncommitted changes;
 - builds the image `identitee-build:<toolchain>-trixie` (Rust, `protobuf-compiler`, `clang`,
   `libclang-dev`, `rust-src`, the `wasm32v1-none` target);
-- runs `cargo build --locked --release -p identitee-node` as the calling user, with the cargo cache in
+- runs `cargo build --locked --release -p identitee-node --features metadata-hash` as the calling user
+  (the feature embeds the metadata hash in the runtime, see "Wallets and the metadata hash"), with the cargo cache in
   `$CARGO_CACHE` (default `~/.cache/identitee-cargo-trixie`);
 - checks the result in a bare `debian:trixie-slim` (`ldd` and `--version`).
 
@@ -81,12 +82,12 @@ Replacing the binary does not change the chain's runtime. The runtime is Wasm st
 
 ### Wallets and the metadata hash
 
-The runtime is built without the `metadata-hash` feature, so it carries no metadata hash and its
-`CheckMetadataHash` extension only accepts mode 0. A wallet that signs in mode 1 (the RFC-78 check
-that some wallets turn on by default, and that Ledger requires) is refused with
-`1011: Unknown Transaction Validity: CannotLookup`. Sign with the metadata hash check off; a
-transaction in mode 0 goes through. Building the runtime with `--features metadata-hash` would make
-mode 1 work, and needs a `setCode`.
+Release builds pass `--features metadata-hash`, which embeds the hash of the runtime's metadata
+(token IDT, 12 decimals) in the Wasm: the `CheckMetadataHash` extension then accepts both mode 0 and
+mode 1, the RFC-78 check that some wallets turn on by default and that Ledger requires. A runtime built
+without the feature (runtime 10 and before) carries no hash and only accepts mode 0: a wallet signing
+in mode 1 is refused with `1011: Unknown Transaction Validity: CannotLookup`. Runtime 11 is the first
+built with it.
 
 After a `setCode`, wallets that keep the chain's metadata (browser extensions, polkadot.js Apps under
 Settings, Metadata) must update it before signing again.

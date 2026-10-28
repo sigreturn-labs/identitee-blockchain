@@ -45,7 +45,7 @@ docker run --rm \
 	-v "$REPO:/src" \
 	-w /src \
 	"$IMAGE" \
-	bash -c 'cargo build --locked --release -p identitee-node'
+	bash -c 'cargo build --locked --release -p identitee-node --features metadata-hash'
 
 BIN="$REPO/target-trixie/release/identitee-node"
 # Check that the binary starts on a bare Debian 13 (shared libraries and glibc symbols).
