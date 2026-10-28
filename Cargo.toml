@@ -69,6 +69,7 @@ frame-try-runtime = { version = "0.54.0", default-features = false }
 futures = { version = "0.3.31" }
 jsonrpsee = { version = "0.24.11" }
 pallet-aura = { version = "48.0.0", default-features = false }
+pallet-authorship = { version = "48.0.0", default-features = false }
 pallet-balances = { version = "50.0.0", default-features = false }
 pallet-grandpa = { version = "49.0.0", default-features = false }
 pallet-skip-feeless-payment = { version = "23.0.0", default-features = false }

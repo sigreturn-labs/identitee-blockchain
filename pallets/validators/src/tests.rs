@@ -131,3 +131,17 @@ fn session_is_handed_the_list_only_after_a_change() {
 		assert_eq!(Validators::new_session(5), Some(vec![1]));
 	});
 }
+
+#[test]
+fn the_block_author_earns_the_reward() {
+	use pallet_authorship::EventHandler;
+	new_test_ext().execute_with(|| {
+		let issuance = pallet_balances::TotalIssuance::<Test>::get();
+		Validators::note_author(1);
+		assert_eq!(Balances::free_balance(1), 100 + BLOCK_REWARD);
+		// An account without balance is created by its reward.
+		Validators::note_author(7);
+		assert_eq!(Balances::free_balance(7), BLOCK_REWARD);
+		assert_eq!(pallet_balances::TotalIssuance::<Test>::get(), issuance + 2 * BLOCK_REWARD);
+	});
+}

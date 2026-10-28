@@ -77,7 +77,12 @@ impl pallet_validators::Config for Test {
 	type WeightInfo = crate::weights::SubstrateWeight<Test>;
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxValidators = ConstU32<3>;
+	type RewardCurrency = Balances;
+	type BlockReward = ConstU64<BLOCK_REWARD>;
 }
+
+/// Block reward of the test runtime.
+pub const BLOCK_REWARD: u64 = 10;
 
 /// The genesis validator: account 1, with key 1.
 pub const GENESIS_VALIDATOR: u64 = 1;

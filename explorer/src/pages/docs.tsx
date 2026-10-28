@@ -302,6 +302,10 @@ export function Docs() {
           The account needs no tokens and no proof: root vouches for the keys. GRANDPA needs more than two thirds of the validators online to
           finalize, so with two validators both must be up; blocks keep coming without them, finality waits.
         </p>
+        <p>
+          The author of each block earns 10 IDT, minted for it, and the fees of the block. A validator earns in proportion to the blocks it
+          produces.
+        </p>
         <Calls
           label="Validator set calls"
           rows={[

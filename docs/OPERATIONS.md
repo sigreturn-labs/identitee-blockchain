@@ -227,6 +227,9 @@ offline. With several validators, Aura also stops producing on a node left witho
 it runs with `--force-authoring`: the operator's node does (`deploy/identitee-node.service`), so blocks
 keep coming in its slots while the other validators are away.
 
+Rewards: the author of each block earns 10 IDT, minted for it, and the transaction fees and tips of
+the block. A validator earns in proportion to the blocks it produces; one that is down earns nothing.
+
 Runtime 9 introduced sessions on a chain started without them: its migration made the sudo account
 the validator owning the genesis keys, so no authority changed during the upgrade.
 

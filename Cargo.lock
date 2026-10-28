@@ -4461,6 +4461,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
  "pallet-aura",
+ "pallet-authorship",
  "pallet-balances",
  "pallet-grandpa",
  "pallet-identitee",
@@ -7078,6 +7079,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-authorship",
  "pallet-balances",
  "pallet-session",
  "parity-scale-codec",

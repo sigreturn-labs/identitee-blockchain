@@ -5,7 +5,10 @@ use frame_support::{
 	derive_impl,
 	dispatch::DispatchClass,
 	parameter_types,
-	traits::{ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, VariantCountOf},
+	traits::{
+		fungible::{Balanced, Credit},
+		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, OnUnbalanced, VariantCountOf,
+	},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
 		IdentityFee, Weight,
@@ -22,10 +25,10 @@ use sp_version::RuntimeVersion;
 
 // Local module imports
 use super::{
-	AccountId, Aura, Balance, Balances, Block, BlockNumber, Hash, Nonce, PalletInfo, Runtime,
-	RuntimeCall, RuntimeEvent, RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask,
-	SessionKeys, System, Validators, BLOCK_HASH_COUNT, DAYS, EXISTENTIAL_DEPOSIT, MINUTES,
-	SLOT_DURATION, VERSION,
+	AccountId, Aura, Authorship, Balance, Balances, Block, BlockNumber, Hash, Nonce, PalletInfo,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin,
+	RuntimeTask, SessionKeys, System, Validators, BLOCK_HASH_COUNT, DAYS, EXISTENTIAL_DEPOSIT,
+	MINUTES, SLOT_DURATION, UNIT, VERSION,
 };
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -138,9 +141,22 @@ parameter_types! {
 	pub FeeMultiplier: Multiplier = Multiplier::one();
 }
 
+/// Transaction fees and tips go to the author of the block. Without an author (never on a running
+/// chain) they are burned.
+pub struct FeesToAuthor;
+
+impl OnUnbalanced<Credit<AccountId, Balances>> for FeesToAuthor {
+	fn on_nonzero_unbalanced(amount: Credit<AccountId, Balances>) {
+		if let Some(author) = Authorship::author() {
+			// A credit below the existential deposit of a new account is dropped, so burned.
+			let _ = Balances::resolve(&author, amount);
+		}
+	}
+}
+
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type OnChargeTransaction = FungibleAdapter<Balances, ()>;
+	type OnChargeTransaction = FungibleAdapter<Balances, FeesToAuthor>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
@@ -196,4 +212,16 @@ impl pallet_validators::Config for Runtime {
 	type WeightInfo = pallet_validators::weights::SubstrateWeight<Runtime>;
 	type ManagerOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxValidators = ConstU32<MAX_VALIDATORS>;
+	type RewardCurrency = Balances;
+	type BlockReward = ConstU128<BLOCK_REWARD>;
+}
+
+/// Minted for the author of each block: 10 IDT.
+pub const BLOCK_REWARD: Balance = 10 * UNIT;
+
+impl pallet_authorship::Config for Runtime {
+	/// The author is the validator whose Aura slot the block claims.
+	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
+	/// It earns the block reward.
+	type EventHandler = Validators;
 }

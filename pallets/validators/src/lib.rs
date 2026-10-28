@@ -13,6 +13,10 @@
 //!
 //! The last validator cannot be removed. Session skips the validators without keys, so a
 //! validator purging its keys stops validating like one removed.
+//!
+//! The author of each block earns `Config::BlockReward`, minted when `pallet_authorship` notes the
+//! author ([`pallet_authorship::EventHandler`]): validators earn in proportion to the blocks they
+//! produce, and one that is down earns nothing.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -33,13 +37,21 @@ pub use weights::WeightInfo;
 pub mod pallet {
 	use super::WeightInfo;
 	use alloc::vec::Vec;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{
+		dispatch::DispatchClass,
+		pallet_prelude::*,
+		traits::fungible::{Inspect, Mutate},
+	};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::SessionManager;
-	use sp_runtime::traits::OpaqueKeys;
+	use sp_runtime::traits::{OpaqueKeys, Zero};
 
 	/// The session keys of a validator.
 	pub type KeysOf<T> = <T as pallet_session::Config>::Keys;
+
+	/// A balance of the reward currency.
+	pub type BalanceOf<T> =
+		<<T as Config>::RewardCurrency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -59,6 +71,11 @@ pub mod pallet {
 		/// Maximum number of validators (the Aura and GRANDPA authority limit).
 		#[pallet::constant]
 		type MaxValidators: Get<u32>;
+		/// The currency block rewards are minted in.
+		type RewardCurrency: Mutate<Self::AccountId>;
+		/// Minted for the author of each block.
+		#[pallet::constant]
+		type BlockReward: Get<BalanceOf<Self>>;
 	}
 
 	/// The validators, in the order they were added.
@@ -194,5 +211,22 @@ pub mod pallet {
 		fn end_session(_: u32) {}
 
 		fn start_session(_: u32) {}
+	}
+
+	impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
+		/// Mints the block reward for the author. A mint that fails (it cannot happen for an
+		/// existing account) only loses the reward: the block goes on.
+		fn note_author(author: T::AccountId) {
+			let reward = T::BlockReward::get();
+			if reward.is_zero() {
+				return;
+			}
+			let _ = T::RewardCurrency::mint_into(&author, reward);
+			// The account and the total issuance.
+			frame_system::Pallet::<T>::register_extra_weight_unchecked(
+				T::DbWeight::get().reads_writes(2, 2),
+				DispatchClass::Mandatory,
+			);
+		}
 	}
 }

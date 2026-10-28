@@ -1,10 +1,11 @@
 //! The identitee runtime: a Polkadot SDK solochain whose purpose is the identitee pallet.
 //!
 //! Besides `pallet_identitee`, it holds the pallets a standalone chain needs: Aura block
-//! production, GRANDPA finality, sessions over a validator set managed by root, balances,
-//! transaction payment (skipped for feeless identity calls) and sudo. Pallet configuration lives in
-//! `configs`, the runtime APIs in `apis`, the transaction extension that lets never-funded accounts
-//! write their identity in `extensions`, and upgrade migrations in `migrations`.
+//! production, GRANDPA finality, sessions over a validator set managed by root, block rewards,
+//! balances, transaction payment (skipped for feeless identity calls, fees to the block author) and
+//! sudo. Pallet configuration lives in `configs`, the runtime APIs in `apis`, the transaction
+//! extension that lets never-funded accounts write their identity in `extensions`, and upgrade
+//! migrations in `migrations`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -71,7 +72,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: alloc::borrow::Cow::Borrowed("identitee"),
 	authoring_version: 1,
 	// Bumped with every runtime upgrade, so nodes and clients see that the logic changed.
-	spec_version: 9,
+	spec_version: 10,
 	impl_version: 1,
 	apis: apis::RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -233,4 +234,7 @@ mod runtime {
 
 	#[runtime::pallet_index(10)]
 	pub type Session = pallet_session;
+
+	#[runtime::pallet_index(11)]
+	pub type Authorship = pallet_authorship;
 }
