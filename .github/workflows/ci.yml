@@ -1,0 +1,239 @@
+# Runs the checks of CONTRIBUTING.md and a short dev chain on pull requests and pushes to master,
+# only for the parts that changed (a change to this file checks everything). The explorer imports
+# web's sources, so it is checked again when web/ changes. Same supply chain rules as release.yml;
+# the Rust cache is only saved by pushes to master, so a pull request can read it but not write it.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      rust: ${{ steps.paths.outputs.rust }}
+      web: ${{ steps.paths.outputs.web }}
+      explorer: ${{ steps.paths.outputs.explorer }}
+      tools: ${{ steps.paths.outputs.tools }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Changed parts
+        id: paths
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # No usable base (new branch, force push): check everything.
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$BASE" HEAD)
+          else
+            files=.github/workflows/ci.yml
+          fi
+          echo "$files"
+          touched() { grep -qE "$1" <<< "$files" && echo true || echo false; }
+          all='^\.github/workflows/ci\.yml$'
+          {
+            echo "rust=$(touched "$all|^(node|runtime|pallets)/|^Cargo\.(toml|lock)$|^rust-toolchain\.toml$|^\.rustfmt\.toml$")"
+            echo "web=$(touched "$all|^web/")"
+            echo "explorer=$(touched "$all|^(explorer|web)/")"
+            echo "tools=$(touched "$all|^tools/")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: never
+      # No incremental build data or debug info: keeps target/ small enough for the runner's disk
+      # and the 10 GB cache limit.
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      PROTOC_VERSION: "25.5"
+      PROTOC_SHA256: e1ed237a17b2e851cf9662cb5ad02b46e70ff8e060e05984725bc4b4228c6b28
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev unzip
+          # Ubuntu 22.04's protoc is too old for proto3 optional fields.
+          curl -fsSL -o protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          echo "${PROTOC_SHA256}  protoc.zip" | sha256sum -c -
+          sudo unzip -o protoc.zip -d /usr/local bin/protoc 'include/*'
+          rm protoc.zip
+          protoc --version
+
+      # rustup reads rust-toolchain.toml: Rust 1.93.0 with rust-src and the wasm32v1-none target.
+      - name: Toolchain
+        run: rustup show active-toolchain
+
+      - name: Restore the build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: rust-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets
+
+      - name: Tests
+        run: cargo test --locked --workspace
+
+      # A development chain must produce blocks, as release.yml checks on the release binary. A
+      # debug build is enough here and reuses most of what the tests compiled.
+      - name: Dev chain
+        run: |
+          cargo build --locked -p identitee-node
+          target/debug/identitee-node --dev --tmp --no-telemetry --no-prometheus --rpc-port 19944 > dev.log 2>&1 &
+          pid=$!
+          for _ in $(seq 60); do
+            grep -q 'Imported #2' dev.log && break
+            sleep 2
+          done
+          kill "$pid"
+          grep -q 'Imported #2' dev.log || { cat dev.log; exit 1; }
+
+      - name: Save the build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  explorer:
+    needs: changes
+    if: needs.changes.outputs.explorer == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: explorer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            explorer/package-lock.json
+
+      # The explorer builds against the web front's sources (`@web`), which need web's dependencies.
+      - name: Install web's dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  tools:
+    needs: changes
+    if: needs.changes.outputs.tools == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
