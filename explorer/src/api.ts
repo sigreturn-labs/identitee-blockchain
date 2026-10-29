@@ -208,7 +208,7 @@ export type Account = {
   publicKey: string;
   balance: { free: string; reserved: string; frozen: string } | null;
   nonce: number | null;
-  identity: { display: string | null; username: string | null; trust: string | null } | null;
+  identity: { display: string | null; username: string | null; trust: string | null; avatar: string | null } | null;
   roles: { sudo: boolean; validator: boolean; agent: AgentRole[] } | null;
   profileUrl: string;
   node: "up" | "down";

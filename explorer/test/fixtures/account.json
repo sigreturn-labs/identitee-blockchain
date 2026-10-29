@@ -10,7 +10,8 @@
   "identity": {
     "display": "Alice",
     "username": "alice",
-    "trust": "FullyVerified"
+    "trust": "FullyVerified",
+    "avatar": null
   },
   "roles": {
     "sudo": true,

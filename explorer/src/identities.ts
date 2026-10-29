@@ -1,11 +1,11 @@
-// Who stands behind an address: the display name, the username and the trust level, as a link to an
-// account shows them. The links of a page ask together: their addresses are gathered for one tick,
-// then read in one `/api/identities` call per 50. Answers are kept a minute; a failed read is kept
-// as nothing, so the link just shows the address.
+// Who stands behind an address: the display name, the username, the trust level and the hash of the
+// avatar, as a link to an account shows them. The links of a page ask together: their addresses are
+// gathered for one tick, then read in one `/api/identities` call per 50. Answers are kept a minute; a
+// failed read is kept as nothing, so the link just shows the address.
 import { useEffect, useState } from "preact/hooks";
 import { get } from "./api.ts";
 
-export type Identity = { display: string | null; username: string | null; trust: string | null };
+export type Identity = { display: string | null; username: string | null; trust: string | null; avatar: string | null };
 
 const BATCH = 50;
 const KEEP_MS = 60_000;

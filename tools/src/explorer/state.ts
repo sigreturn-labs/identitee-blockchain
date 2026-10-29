@@ -4,8 +4,8 @@
 
 import type { ApiPromise } from '@polkadot/api';
 import type { Codec } from '@polkadot/types/types';
-import { u8aToHex } from '@polkadot/util';
-import { decodeAddress, encodeAddress } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
+import { blake2AsHex, decodeAddress, encodeAddress } from '@polkadot/util-crypto';
 
 import { AURA_AUTHORITIES_KEY, auraAuthor, auraAuthorityKeys, auraSlot, SS58_PREFIX, toJson } from './decode.ts';
 
@@ -42,6 +42,8 @@ export interface IdentitySummary {
   display: string | null;
   username: string | null;
   trust: string | null;
+  /** A short hash of the avatar on chain (it changes with the image), null without one. */
+  avatar: string | null;
 }
 
 export interface Roles {
@@ -130,14 +132,33 @@ export function identitySummary(api: ApiPromise, address: string): Promise<Ident
       at.query.identitee.nameOf(key),
       at.call.identiteeApi.trustLevel(key),
     ])) as [Codec, Codec, Codec];
-    const id = toJson(identity) as { typed?: Array<[unknown, unknown]> } | null;
+    const id = toJson(identity) as { typed?: Array<[unknown, unknown]>; avatar?: unknown } | null;
     let display: string | null = null;
     for (const [kind, value] of id?.typed ?? []) {
       if (kind === 'DisplayName' && typeof value === 'object' && value !== null && typeof (value as Json).Public === 'string') display = (value as Json).Public;
     }
     const username = toJson(name);
     const level = toJson(trust);
-    return { display, username: typeof username === 'string' ? username : null, trust: typeof level === 'string' ? level : null };
+    const image = avatarOf(id);
+    return {
+      display,
+      username: typeof username === 'string' ? username : null,
+      trust: typeof level === 'string' ? level : null,
+      avatar: image === null ? null : blake2AsHex(image, 64).slice(2),
+    };
+  });
+}
+
+/** The avatar bytes (WebP) of an identity as `toJson` gives it, null without one. */
+const avatarOf = (identity: { avatar?: unknown } | null): Uint8Array | null =>
+  typeof identity?.avatar === 'string' && identity.avatar !== '0x' ? hexToU8a(identity.avatar) : null;
+
+/** The avatar an account has on chain (a WebP image), null without one. */
+export function avatar(api: ApiPromise, address: string): Promise<Uint8Array | null> {
+  const key = publicKey(address);
+  return cached(api, `avatar:${key}`, async () => {
+    const at = await head(api);
+    return avatarOf(toJson(await at.query.identitee.identities(key)) as { avatar?: unknown } | null);
   });
 }
 

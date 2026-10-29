@@ -3,7 +3,6 @@
 // (block link, age, account).
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { Avatar } from "@web/ui/avatar.tsx";
 import { LEVEL_LABELS, LevelBadge } from "@web/ui/level.tsx";
 import type { TrustLevel } from "@web/chain/identity.ts";
 import { shortAddress, publicKeyOf } from "../address.ts";
@@ -11,6 +10,7 @@ import type { ApiError } from "../api.ts";
 import { type Paged, usePaged } from "../data.ts";
 import { ago, formatNumber } from "../format.ts";
 import { useIdentity } from "../identities.ts";
+import { AccountAvatar } from "./account-avatar.tsx";
 
 export const isTrust = (t: string | null): t is TrustLevel => t !== null && Object.hasOwn(LEVEL_LABELS, t);
 
@@ -167,7 +167,7 @@ export function accountName(identity: { display: string | null; username: string
   return folded !== null && folded.trim() !== "" && !looksLikeAddress(folded) ? folded : null;
 }
 
-/** An account: its generated avatar, then who it is when it says so (its name, with the edges of
+/** An account: its avatar, then who it is when it says so (its name, with the edges of
  * the address in brackets and the trust badge), else the edges of the address, linking to its page. */
 export function AccountLink({ address }: { address: string }) {
   const key = publicKeyOf(address);
@@ -178,7 +178,7 @@ export function AccountLink({ address }: { address: string }) {
     <a class="x-account" href={`/account/${address}`} title={address}>
       {key !== null && (
         <span class="x-account-avatar" aria-hidden="true">
-          <Avatar publicKey={key} size={18} />
+          <AccountAvatar address={address} publicKey={key} version={identity?.avatar} size={18} />
         </span>
       )}
       {name === null ? (

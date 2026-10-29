@@ -2,7 +2,8 @@
 // origins, errors as `{ "error": "<code>" }` (400 or 404 on bad input, 503 when a route needs the
 // node and it is down, never a 500 for input). Indexed data is served from the store whatever the
 // node does; live state (balances, identities, roles, authorities, validators) comes through `Live`.
-// `/api/live` is a Server-Sent Events stream of the heads.
+// `/api/live` is a Server-Sent Events stream of the heads, `/api/avatar/<address>` an account's
+// avatar as a WebP image.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -64,6 +65,8 @@ export interface Live {
   specVersion(): number | null;
   account(address: string): Promise<Balance & { nonce: number }>;
   identitySummary(address: string): Promise<state.IdentitySummary>;
+  /** The avatar on chain (WebP bytes), null without one. */
+  avatar(address: string): Promise<Uint8Array | null>;
   roles(address: string): Promise<state.Roles>;
   authorities(): Promise<state.AuthorityState[]>;
   validators(): Promise<state.Validators>;
@@ -105,6 +108,7 @@ export const OFFLINE: Live = {
   specVersion: () => null,
   account: down,
   identitySummary: down,
+  avatar: down,
   roles: down,
   authorities: down,
   validators: down,
@@ -170,6 +174,7 @@ export function chainLive(api: ApiPromise, labels: Record<string, string>): Live
         return { free: d.free.toString(), reserved: d.reserved.toString(), frozen: (d.frozen ?? d.miscFrozen).toString(), nonce: info.nonce.toNumber() };
       }),
     identitySummary: (address) => up(() => state.identitySummary(api, address)),
+    avatar: (address) => up(() => state.avatar(api, address)),
     roles: (address) => up(() => state.roles(api, address)),
     authorities: () => up(() => state.authorities(api)),
     validators: () => up(() => state.validators(api, labels)),
@@ -418,15 +423,19 @@ export class ExplorerApi {
       }
       const url = new URL(req.url ?? '/', 'http://explorer');
       if (url.pathname === '/api/live') return this.stream(res, headers);
+      const image = AVATAR_PATH.exec(url.pathname);
+      if (image !== null) {
+        const addr = address(decoded(image[1]!));
+        const webp = await this.needLive((l) => l.avatar(addr));
+        if (webp === null) throw notFound();
+        res.writeHead(200, { ...headers, 'content-type': 'image/webp', 'cache-control': 'public, max-age=300', 'content-length': String(webp.length) });
+        res.end(webp);
+        return;
+      }
       for (const [pattern, handler, cacheable] of this.routes) {
         const m = pattern.exec(url.pathname);
         if (m === null) continue;
-        let params: Params;
-        try {
-          params = m.slice(1).map((p) => decodeURIComponent(p));
-        } catch {
-          throw new ApiError(400, 'bad_request');
-        }
+        const params: Params = m.slice(1).map(decoded);
         const out = await handler(params, url.searchParams);
         if (out instanceof Uncached) return json(200, out.value);
         return json(200, out, cacheable ? 'public, max-age=300' : 'no-store');
@@ -779,6 +788,17 @@ function blockId(id: string): number | string {
 }
 
 const MAX_IDENTITIES = 50;
+/** A percent-encoded path segment, decoded; 400 `bad_request` if it is not valid. */
+function decoded(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new ApiError(400, 'bad_request');
+  }
+}
+
+/** `/api/avatar/<address>`: the avatar on chain as `image/webp`, 404 without one. */
+const AVATAR_PATH = /^\/api\/avatar\/([^/]+)$/;
 
 function address(input: string): string {
   const addr = normalizeAddress(input);

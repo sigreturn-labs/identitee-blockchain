@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "../src/app.tsx";
+import { API } from "../src/api.ts";
 import { forgetIdentities } from "../src/identities.ts";
 import { AccountLink, accountName } from "../src/ui/table.tsx";
 import { serve, waitFor } from "./support/serve.ts";
@@ -54,6 +55,35 @@ describe("Account links", () => {
     render(<AccountLink address={ALICE} />, root);
     await new Promise((r) => setTimeout(r, 20));
     expect(root.textContent).toBe("idrfve…YX3ogk");
+  });
+});
+
+describe("Account avatars", () => {
+  it("show the avatar set on chain, the generated one otherwise or when the image fails", async () => {
+    serve({
+      "/api/identities": {
+        items: {
+          [ALICE]: { display: "Alice", username: "alice", trust: "Declared", avatar: "00ff00ff00ff00ff" },
+          [BOB]: { display: null, username: "bob", trust: "Declared", avatar: null },
+        },
+      },
+    });
+    render(
+      <div>
+        <AccountLink address={ALICE} />
+        <AccountLink address={BOB} />
+      </div>,
+      root,
+    );
+    const avatars = () => [...root.querySelectorAll(".x-account-avatar")];
+    await waitFor(() => expect(avatars()[0]!.querySelector("img")).not.toBeNull());
+    const img = avatars()[0]!.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(`${API}/api/avatar/${ALICE}?v=00ff00ff00ff00ff`);
+    expect(avatars()[1]!.querySelector("img")).toBeNull();
+    expect(avatars()[1]!.querySelector("canvas")).not.toBeNull();
+    img.dispatchEvent(new Event("error"));
+    await waitFor(() => expect(avatars()[0]!.querySelector("canvas")).not.toBeNull());
+    expect(avatars()[0]!.querySelector("img")).toBeNull();
   });
 });
 

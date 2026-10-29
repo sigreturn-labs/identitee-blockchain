@@ -7,9 +7,9 @@ import type { ApiPromise } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { TypeRegistry } from '@polkadot/types';
 import { u8aToHex } from '@polkadot/util';
-import { cryptoWaitReady, encodeAddress } from '@polkadot/util-crypto';
+import { blake2AsHex, cryptoWaitReady, encodeAddress } from '@polkadot/util-crypto';
 
-import { roles } from '../src/explorer/state.ts';
+import { avatar, identitySummary, roles } from '../src/explorer/state.ts';
 
 await cryptoWaitReady();
 const keyring = new Keyring({ type: 'sr25519' });
@@ -47,5 +47,37 @@ describe('roles', () => {
     const api = node([alice.publicKey], null);
     assert.equal((await roles(api, u8aToHex(alice.publicKey))).validator, true);
     assert.equal((await roles(api, u8aToHex(bob.publicKey))).validator, false);
+  });
+});
+
+/** A node holding one identity for Alice, with `image` as its avatar (null: none). */
+function withIdentity(image: Uint8Array | null): ApiPromise {
+  const at = {
+    query: {
+      identitee: {
+        identities: async () => registry.createType('Option<{"avatar":"Option<Bytes>"}>', { avatar: image === null ? null : u8aToHex(image) }),
+        nameOf: async () => registry.createType('Option<Text>', 'alice'),
+      },
+    },
+    call: { identiteeApi: { trustLevel: async () => registry.createType('Text', 'Unknown') } },
+  };
+  return { at: async () => at, rpc: { chain: { getFinalizedHead: async () => '0x01' } } } as unknown as ApiPromise;
+}
+
+describe('avatar', () => {
+  const IMAGE = new Uint8Array([0x52, 0x49, 0x46, 0x46, 9, 8, 7]);
+
+  it('reads the avatar bytes, and gives their short hash with the identity', async () => {
+    const api = withIdentity(IMAGE);
+    const who = encodeAddress(alice.publicKey, 2426);
+    assert.deepEqual(await avatar(api, who), IMAGE);
+    assert.equal((await identitySummary(api, who)).avatar, blake2AsHex(IMAGE, 64).slice(2));
+  });
+
+  it('is null without an avatar', async () => {
+    const api = withIdentity(null);
+    const who = encodeAddress(alice.publicKey, 2426);
+    assert.equal(await avatar(api, who), null);
+    assert.equal((await identitySummary(api, who)).avatar, null);
   });
 });

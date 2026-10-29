@@ -348,10 +348,11 @@ extrinsics that are final are sent with `Cache-Control: public, max-age=300`, th
 | `/api/extrinsics` | `signer`, `pallet`, `signed=1` | extrinsics, newest first |
 | `/api/extrinsic/<hash or block-index>` | | the decoded call, signer, nonce, tip, fee, result and events |
 | `/api/events` | `pallet`, `method` | events, newest first, with a sentence for those the explorer explains (every identitee event) |
-| `/api/identities` | `a` | display name, username and trust level of up to 50 comma-separated addresses, keyed as given |
+| `/api/identities` | `a` | display name, username, trust level and avatar hash of up to 50 comma-separated addresses, keyed as given |
 | `/api/account/<address or hex key>` | | balance, nonce, identity summary, roles, profile link |
 | `/api/account/<address>/history` | | its extrinsics and events |
 | `/api/account/<address>/transfers` | | its transfers |
+| `/api/avatar/<address>` | | the avatar set on chain, as `image/webp` (`max-age=300`); 404 without one |
 | `/api/authorities` | | authorities with their agents and capabilities |
 | `/api/authority/<id>` | `cursor`, `limit` | one authority, with its attestations |
 | `/api/attestations` | `authority` | requests, attestations, revocations and rejections |

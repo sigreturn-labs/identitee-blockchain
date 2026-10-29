@@ -95,6 +95,10 @@ function fill(store: ExplorerStore): void {
   }
 }
 
+/** Alice's avatar: the bytes do not matter to the API, only that they come back as they are. */
+const AVATAR = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 0xff]);
+const AVATAR_HASH = '0123456789abcdef';
+
 const AUTHORITIES: AuthorityState[] = [
   { id: 0, name: 'identitee', active: true, agents: [{ address: BOB, capabilities: 15, capabilityNames: ['attest_fields', 'person_facts', 'manage_names', 'migrate'] }] },
   { id: 1, name: 'example.com', active: true, agents: [] },
@@ -120,7 +124,9 @@ function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boole
       return f.up ? Promise.resolve(v) : Promise.reject(new Error('disconnected'));
     },
     account: (address: string) => f.guard({ free: address === ALICE ? '5000000000000' : '0', reserved: '0', frozen: '0', nonce: 3 }),
-    identitySummary: (address: string) => f.guard({ display: address === ALICE ? 'Alice' : null, username: address === ALICE ? 'alice' : address === BOB ? 'me' : null, trust: 'Unknown' }),
+    identitySummary: (address: string) =>
+      f.guard({ display: address === ALICE ? 'Alice' : null, username: address === ALICE ? 'alice' : address === BOB ? 'me' : null, trust: 'Unknown', avatar: address === ALICE ? AVATAR_HASH : null }),
+    avatar: (address: string) => f.guard(address === ALICE ? AVATAR : null),
     roles: (address: string) => f.guard({ sudo: address === ALICE, validator: address === ALICE, agent: [] }),
     authorities: () => f.guard(AUTHORITIES),
     validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01' }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01' }], setId: 0 }),
@@ -521,7 +527,7 @@ describe('accounts', () => {
       publicKey: ALICE_HEX,
       balance: { free: '5000000000000', reserved: '0', frozen: '0' },
       nonce: 3,
-      identity: { display: 'Alice', username: 'alice', trust: 'Unknown' },
+      identity: { display: 'Alice', username: 'alice', trust: 'Unknown', avatar: AVATAR_HASH },
       roles: { sudo: true, validator: true, agent: [] },
       profileUrl: 'https://identit.ee/alice',
       node: 'up',
@@ -535,9 +541,9 @@ describe('accounts', () => {
   it('gives the identity summary of several addresses, keyed as asked', async () => {
     assert.deepEqual(await ok(`/api/identities?a=${ALICE},${BOB},${ALICE_GENERIC},${ALICE}`), {
       items: {
-        [ALICE]: { display: 'Alice', username: 'alice', trust: 'Unknown' },
-        [BOB]: { display: null, username: 'me', trust: 'Unknown' },
-        [ALICE_GENERIC]: { display: 'Alice', username: 'alice', trust: 'Unknown' },
+        [ALICE]: { display: 'Alice', username: 'alice', trust: 'Unknown', avatar: AVATAR_HASH },
+        [BOB]: { display: null, username: 'me', trust: 'Unknown', avatar: null },
+        [ALICE_GENERIC]: { display: 'Alice', username: 'alice', trust: 'Unknown', avatar: AVATAR_HASH },
       },
     });
   });
@@ -551,6 +557,20 @@ describe('accounts', () => {
 
   it('refuses an invalid address', async () => {
     for (const a of ['nobody', `${ALICE.slice(0, -1)}x`, '0x1234']) assert.deepEqual((await get(`/api/account/${a}`)).body, { error: 'bad_address' });
+  });
+
+  it('serves the avatar on chain as a WebP image', async () => {
+    const res = await fetch(`${base}/api/avatar/${ALICE_GENERIC}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/webp');
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+    assert.deepEqual(new Uint8Array(await res.arrayBuffer()), AVATAR);
+  });
+
+  it('answers 404 for an account without an avatar, 400 for a bad address', async () => {
+    assert.deepEqual(await get(`/api/avatar/${BOB}`).then((r) => [r.status, r.body]), [404, { error: 'not_found' }]);
+    assert.deepEqual(await get('/api/avatar/nobody').then((r) => [r.status, r.body]), [400, { error: 'bad_address' }]);
+    assert.deepEqual(await get('/api/avatar/%E0%A4%A').then((r) => [r.status, r.body]), [400, { error: 'bad_request' }]);
   });
 
   it('pages the history of an address', async () => {
@@ -794,6 +814,7 @@ describe('node down', () => {
       assert.equal(a.profileUrl, `https://identit.ee/a/${ALICE}`);
       assert.deepEqual((await get('/api/network')).body, { error: 'node_down' });
       assert.equal((await get('/api/authorities')).status, 503);
+      assert.deepEqual((await get(`/api/avatar/${ALICE}`)).body, { error: 'node_down' });
       assert.equal((await ok('/api/search?q=12')).kind, 'block');
       assert.equal((await ok('/api/search?q=alice')).kind, 'none');
     } finally {

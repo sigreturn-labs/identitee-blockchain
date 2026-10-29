@@ -1,6 +1,5 @@
 import { useRoute } from "preact-iso";
 import { useState } from "preact/hooks";
-import { Avatar } from "@web/ui/avatar.tsx";
 import { CopyButton } from "@web/ui/copy.tsx";
 import { LEVEL_LABELS, LevelBadge } from "@web/ui/level.tsx";
 import { shortAddress } from "../address.ts";
@@ -8,6 +7,7 @@ import type { Account as AccountData, HistoryItem, Transfer } from "../api.ts";
 import { useApi } from "../data.ts";
 import { capabilityLabel, formatIdt, formatNumber } from "../format.ts";
 import { AccountLink, Age, isTrust, BlockLink, CallName, ErrorCard, PagedTable, Skeleton, useNow } from "../ui/table.tsx";
+import { AccountAvatar } from "../ui/account-avatar.tsx";
 import { Row } from "../ui/fields.tsx";
 import { EventText } from "./events.tsx";
 
@@ -60,7 +60,7 @@ export function Account() {
   return (
     <section class="x-page">
       <div class="x-account-head">
-        <Avatar publicKey={data.publicKey} size={56} />
+        <AccountAvatar address={data.address} publicKey={data.publicKey} version={identity?.avatar} size={56} />
         <div>
           <div class="title-line">
             <h1>{identity?.display ?? shortAddress(data.address)}</h1>
