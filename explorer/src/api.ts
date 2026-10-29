@@ -227,7 +227,12 @@ export type Runtime = {
 };
 
 export type Network = {
-  validators: { aura: Array<{ key: string; label: string | null }>; grandpa: Array<{ key: string; weight: number; label: string | null }>; setId: number };
+  /** `account`: the account owning the key, null if none. */
+  validators: {
+    aura: Array<{ key: string; label: string | null; account: string | null }>;
+    grandpa: Array<{ key: string; weight: number; label: string | null; account: string | null }>;
+    setId: number;
+  };
   health: { peers: number; isSyncing: boolean; shouldHavePeers: boolean };
   blockTime: { target: number; recent: number | null };
   grandpaSetId: number;

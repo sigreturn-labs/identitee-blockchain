@@ -36,6 +36,8 @@ export function Account() {
   const fromHash = query.from === "hash";
   const { data, error, reload } = useApi<AccountData>(`/api/account/${encodeURIComponent(address)}`);
   const [tab, setTab] = useState<(typeof TABS)[number]>("History");
+  // the details: block rewards and the events of the account's own extrinsics
+  const [details, setDetails] = useState(false);
   const now = useNow();
 
   if (error) {
@@ -105,12 +107,17 @@ export function Account() {
             {t}
           </button>
         ))}
+        {tab === "History" && (
+          <button type="button" class="x-tabs-aside" aria-pressed={details} title="Block rewards, and the fees and events of the account's own extrinsics" onClick={() => setDetails(!details)}>
+            {details ? "Hide details" : "Show details"}
+          </button>
+        )}
       </div>
       <div role="tabpanel" aria-label={tab}>
         {tab === "History" ? (
           <PagedTable<HistoryItem>
-            key={`h${base}`}
-            path={`${base}/history`}
+            key={`h${base}${details}`}
+            path={`${base}/history${details ? "?all=1" : ""}`}
             label="History of the account"
             empty={fromHash ? "No activity yet. If this is a block or extrinsic hash, it may not be indexed yet." : "No activity for this account yet."}
             rowKey={(h) => `${h.kind}-${h.item.id}`}

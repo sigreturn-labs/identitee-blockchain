@@ -129,7 +129,7 @@ function fakeLive(): Live & { up: boolean; failLogs: boolean; failMembers: boole
     avatar: (address: string) => f.guard(address === ALICE ? AVATAR : null),
     roles: (address: string) => f.guard({ sudo: address === ALICE, validator: address === ALICE, agent: [] }),
     authorities: () => f.guard(AUTHORITIES),
-    validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01' }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01' }], setId: 0 }),
+    validators: () => f.guard({ aura: [{ key: ALICE_HEX, label: 'identitee-01', account: ALICE }], grandpa: [{ key: ALICE_HEX, weight: 1, label: 'identitee-01', account: ALICE }], setId: 0 }),
     auraKeyOwner: (key: string) => f.guard(key === ALICE_HEX ? ALICE : null),
     recentBlocks: (from: number, to: number) => {
       const list = [];
@@ -584,6 +584,12 @@ describe('accounts', () => {
     assert.equal((await get(`/api/account/${BOB}/history?cursor=28-1`)).status, 400);
   });
 
+  it('adds the details to the history on all=1 only', async () => {
+    // the store decides what a detail is (explorer-store tests); this fixture has none
+    assert.deepEqual(await ok(`/api/account/${BOB}/history?all=1&limit=5`), await ok(`/api/account/${BOB}/history?limit=5`));
+    assert.deepEqual((await get(`/api/account/${BOB}/history?all=yes`)).body, { error: 'bad_all' });
+  });
+
   it('pages the transfers of an address', async () => {
     const p = await ok(`/api/account/${BOB}/transfers?limit=2`);
     assert.deepEqual(p.items.map((t: any) => t.eventId), ['120-1', '119-1']);
@@ -632,6 +638,7 @@ describe('runtime and network', () => {
   it('gives the validators, health, block time and GRANDPA set', async () => {
     const n = await ok('/api/network');
     assert.equal(n.validators.aura[0].label, 'identitee-01');
+    assert.equal(n.validators.grandpa[0].account, ALICE);
     assert.equal(n.health.peers, 2);
     assert.deepEqual(n.blockTime, { target: 6000, recent: 6000 });
     assert.equal(n.grandpaSetId, 0);

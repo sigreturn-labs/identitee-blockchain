@@ -9,7 +9,7 @@ import { TypeRegistry } from '@polkadot/types';
 import { u8aToHex } from '@polkadot/util';
 import { blake2AsHex, cryptoWaitReady, encodeAddress } from '@polkadot/util-crypto';
 
-import { avatar, identitySummary, roles } from '../src/explorer/state.ts';
+import { avatar, identitySummary, roles, validators } from '../src/explorer/state.ts';
 
 await cryptoWaitReady();
 const keyring = new Keyring({ type: 'sr25519' });
@@ -79,5 +79,33 @@ describe('avatar', () => {
     const who = encodeAddress(alice.publicKey, 2426);
     assert.equal(await avatar(api, who), null);
     assert.equal((await identitySummary(api, who)).avatar, null);
+  });
+});
+
+describe('validators', () => {
+  it('gives each Aura and GRANDPA key the account owning it, by key type', async () => {
+    const aura = keyring.addFromUri('//Bob//aura').publicKey;
+    const gran = new Uint8Array(32).fill(7);
+    const owners: Record<string, string> = { [`0x61757261:${u8aToHex(aura)}`]: u8aToHex(bob.publicKey), [`0x6772616e:${u8aToHex(gran)}`]: u8aToHex(bob.publicKey) };
+    const at = {
+      query: {
+        aura: { authorities: async () => [registry.createType('[u8; 32]', aura), registry.createType('[u8; 32]', alice.publicKey)] },
+        grandpa: {
+          authorities: async () => [[registry.createType('[u8; 32]', gran), registry.createType('u64', 1)]],
+          currentSetId: async () => registry.createType('u64', 4),
+        },
+        session: { keyOwner: async ([type, key]: [string, string]) => registry.createType('Option<AccountId32>', owners[`${type}:${key}`] ?? null) },
+      },
+    };
+    const api = { at: async () => at, rpc: { chain: { getFinalizedHead: async () => '0x02' } } } as unknown as ApiPromise;
+    const v = await validators(api, { [u8aToHex(alice.publicKey)]: 'identitee-01' });
+    const BOB = encodeAddress(bob.publicKey, 2426);
+    assert.deepEqual(v.aura, [
+      { key: u8aToHex(aura), label: null, account: BOB },
+      { key: u8aToHex(alice.publicKey), label: 'identitee-01', account: null },
+    ]);
+    // the GRANDPA key is asked under its own key type: under aura's it has no owner
+    assert.deepEqual(v.grandpa, [{ key: u8aToHex(gran), weight: 1, label: null, account: BOB }]);
+    assert.equal(v.setId, 4);
   });
 });

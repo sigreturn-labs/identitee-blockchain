@@ -12,8 +12,9 @@ import { AURA_AUTHORITIES_KEY, auraAuthor, auraAuthorityKeys, auraSlot, SS58_PRE
 type Json = any;
 
 const TTL_MS = 6000;
-/** `aura` as a session key type id. */
+/** `aura` and `gran` as session key type ids. */
 const AURA_KEY_TYPE = '0x61757261';
+const GRANDPA_KEY_TYPE = '0x6772616e';
 
 /** Capability bits of an agent (pallets/identitee/src/types.rs, `Capabilities`). */
 export const CAPABILITIES: ReadonlyArray<[number, string]> = [
@@ -55,9 +56,10 @@ export interface Roles {
   agent: Array<{ authority: number; name: string | null; capabilities: number; capabilityNames: string[] }>;
 }
 
+/** Each key comes with the account owning it (SS58, from session's `KeyOwner`), null if none. */
 export interface Validators {
-  aura: Array<{ key: string; label: string | null }>;
-  grandpa: Array<{ key: string; weight: number; label: string | null }>;
+  aura: Array<{ key: string; label: string | null; account: string | null }>;
+  grandpa: Array<{ key: string; weight: number; label: string | null; account: string | null }>;
   setId: number;
 }
 
@@ -199,9 +201,15 @@ export function validators(api: ApiPromise, labels: Record<string, string> = {})
       Array<[Codec, Codec]>,
       Codec,
     ];
+    const auraKeys = keys(aura);
+    const grandpaKeys = grandpa.map(([k]) => k.toHex().toLowerCase());
+    const [auraOwners, grandpaOwners] = await Promise.all([
+      Promise.all(auraKeys.map((k) => keyOwner(api, AURA_KEY_TYPE, k))),
+      Promise.all(grandpaKeys.map((k) => keyOwner(api, GRANDPA_KEY_TYPE, k))),
+    ]);
     return {
-      aura: keys(aura).map((key) => ({ key, label: null })),
-      grandpa: grandpa.map(([k, w]) => ({ key: k.toHex().toLowerCase(), weight: Number(w.toString()), label: null })),
+      aura: auraKeys.map((key, i) => ({ key, label: null, account: auraOwners[i]! })),
+      grandpa: grandpa.map(([, w], i) => ({ key: grandpaKeys[i]!, weight: Number(w.toString()), label: null, account: grandpaOwners[i]! })),
       setId: Number(setId.toString()),
     } satisfies Validators;
   }).then((v) => {
@@ -218,10 +226,15 @@ function findLabel(labels: Record<string, string>, key: string): string | null {
 /** The account (SS58) owning an Aura key (lowercase hex) at the finalized head, null if none:
  * session's `KeyOwner`, which a validator's keys enter when it is added. */
 export function auraKeyOwner(api: ApiPromise, key: string): Promise<string | null> {
-  return cached(api, `owner:${key}`, async () => {
+  return keyOwner(api, AURA_KEY_TYPE, key);
+}
+
+/** The account (SS58) owning a session key of `type`, null if none (or no session pallet). */
+function keyOwner(api: ApiPromise, type: string, key: string): Promise<string | null> {
+  return cached(api, `owner:${type}:${key}`, async () => {
     const at = await head(api);
     if (at.query.session?.keyOwner === undefined) return null;
-    const owner = toJson(await at.query.session.keyOwner([AURA_KEY_TYPE, key]));
+    const owner = toJson(await at.query.session.keyOwner([type, key]));
     return typeof owner === 'string' ? encodeAddress(decodeAddress(owner), SS58_PREFIX) : null;
   });
 }

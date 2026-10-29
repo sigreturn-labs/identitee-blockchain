@@ -682,7 +682,7 @@ export class ExplorerApi {
   }
 
   private history(addr: string, q: URLSearchParams): unknown {
-    const p = this.store.accountHistory(addr, cursorOf(q), limitOf(q));
+    const p = this.store.accountHistory(addr, cursorOf(q), limitOf(q), !optFlag(q, 'all'));
     const items = p.items.map((h: HistoryItem) => (h.kind === 'extrinsic' ? { kind: h.kind, block: h.block, item: summarize(h.item) } : h));
     return { items: this.times(items), next: p.next };
   }

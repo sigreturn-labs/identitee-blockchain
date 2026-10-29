@@ -456,8 +456,9 @@ other users, as it already is for the node's chain spec; only `secrets/` is 700:
 }
 ```
 
-Blocks show the account that owns their producer's Aura key (by its username or display name), read
-from the chain; a label names a key no account owns, and without one such blocks show the bare key.
+Blocks, and the validators of the network page, show the account that owns the Aura or GRANDPA key
+(by its username or display name), read from the chain; a label names a key no account owns, and
+without one such keys show bare.
 The file is read at startup, and a restart applies a change. The
 service refuses to start, and says why, if the file is not valid JSON, if a key is not 32 bytes of
 hexadecimal, or if a label is empty or too long. Keys and labels are public; keep the file out of the

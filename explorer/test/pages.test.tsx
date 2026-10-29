@@ -5,6 +5,7 @@ import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/app.tsx";
 import { forgetIdentities } from "../src/identities.ts";
+import { validators } from "../src/pages/network.tsx";
 import { Value } from "../src/ui/value.tsx";
 import { LocationProvider } from "preact-iso";
 import { FakeEventSource } from "./support/no-network.ts";
@@ -279,6 +280,51 @@ describe("Extrinsic", () => {
   });
 });
 
+describe("Network", () => {
+  const K = (n: number) => `0x${String(n).repeat(64)}`;
+  it("pairs the keys of a validator by the account owning them, else by label", () => {
+    const rows = validators({
+      aura: [
+        { key: K(1), label: "identitee-01", account: ALICE },
+        { key: K(2), label: null, account: BOB },
+        { key: K(3), label: "old-node", account: null },
+      ],
+      grandpa: [
+        { key: K(4), weight: 1, label: null, account: BOB },
+        { key: K(5), weight: 1, label: "identitee-01", account: ALICE },
+        { key: K(6), weight: 1, label: "old-node", account: null },
+      ],
+      setId: 3,
+    });
+    expect(rows).toEqual([
+      { account: ALICE, label: "identitee-01", aura: K(1), grandpa: K(5) },
+      { account: BOB, label: null, aura: K(2), grandpa: K(4) },
+      { account: null, label: "old-node", aura: K(3), grandpa: K(6) },
+    ]);
+  });
+
+  it("names each validator by its account", async () => {
+    forgetIdentities();
+    const owned = {
+      ...network,
+      validators: {
+        aura: [{ ...network.validators.aura[0]!, account: BOB }],
+        grandpa: [{ ...network.validators.grandpa[0]!, account: BOB }],
+        setId: 0,
+      },
+    };
+    serve({ ...COMMON, "/api/network": owned, "/api/identities": { items: { [BOB]: { display: null, username: "bob", trust: "Declared", avatar: null } } } });
+    open("/network");
+    const table = await waitFor(() => {
+      const t = main().querySelector('[aria-label="Validators"]');
+      expect(t?.textContent).toContain("@bob");
+      return t!;
+    });
+    expect(table.querySelectorAll("tbody tr").length).toBe(1);
+    expect(table.textContent).toContain("Producing, Finalizing");
+  });
+});
+
 describe("Account", () => {
   it("shows balances, the identity with its trust badge, roles and the profile link", async () => {
     serve({ ...COMMON, [`/api/account/${ALICE}`]: account, [`/api/account/${ALICE}/history`]: historyPage, [`/api/account/${ALICE}/transfers`]: transfers });
@@ -319,6 +365,32 @@ describe("Account", () => {
 
     [...main().querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === "Transfers")!.click();
     await waitFor(() => expect(main().querySelector('[aria-label="Transfers"]')?.textContent).toContain("1 IDT"));
+  });
+
+  it("shows the details of the history on demand, and hides them again", async () => {
+    const asked = serve({
+      ...COMMON,
+      [`/api/account/${ALICE}`]: account,
+      [`/api/account/${ALICE}/history?limit=25`]: { items: [], next: null },
+      [`/api/account/${ALICE}/history?all=1&limit=25`]: historyPage2,
+    });
+    open(`/account/${ALICE}`);
+    const toggle = await waitFor(() => {
+      const b = [...main().querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Show details");
+      expect(b).toBeDefined();
+      return b!;
+    });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    await waitFor(() => expect(main().querySelector('[aria-label="History"]')?.textContent).toContain("No activity"));
+    toggle.click();
+    await waitFor(() => expect(main().querySelector('[aria-label="History"]')?.textContent).toContain("sudo.sudo"));
+    expect(asked).toContain(`/api/account/${ALICE}/history?all=1&limit=25`);
+    const hide = [...main().querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Hide details")!;
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    hide.click();
+    await waitFor(() => expect(main().querySelector('[aria-label="History"]')?.textContent).toContain("No activity"));
+    [...main().querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === "Transfers")!.click();
+    await waitFor(() => expect([...main().querySelectorAll("button")].some((b) => b.textContent?.endsWith("details"))).toBe(false));
   });
 
   it("says what is missing while the node is away", async () => {

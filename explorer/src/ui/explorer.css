@@ -531,6 +531,9 @@
   color: var(--ink);
   box-shadow: inset 0 -1px 0 var(--ink);
 }
+.x-tabs .x-tabs-aside {
+  margin-left: auto;
+}
 
 /* Identity feeds: the title, and the links between the three feeds */
 .x-feed-head {

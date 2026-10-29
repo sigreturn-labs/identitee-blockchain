@@ -472,6 +472,34 @@ describe('account history', () => {
   });
 });
 
+/** Block 1 with Alice's block reward and her username claim (events of the block, linked to her). */
+function withReward(): Fixture {
+  const f = fixture(1, { username: true });
+  const evs = [...f.evs, ev(1, f.evs.length, null, 'balances', 'Minted', { who: ALICE, amount: '1' })];
+  const links = [
+    ...f.links,
+    { address: ALICE, itemKind: 'event' as const, itemId: '1-3', block: 1 },
+    { address: ALICE, itemKind: 'event' as const, itemId: '1-4', block: 1 },
+  ];
+  return { ...f, evs, links, block: { ...f.block, eventCount: evs.length } };
+}
+
+const history = (store: ExplorerStore, who: string, main: boolean): string[] =>
+  drain((cur) => store.accountHistory(who, cur, 2, main), 2).map((h) => `${h.block}:${h.kind}:${h.item.index}`);
+
+describe('main history', () => {
+  it('leaves out block rewards and the events of the address\'s own extrinsics, unless asked', () => {
+    const store = new ExplorerStore(':memory:');
+    write(store, withReward());
+    assert.deepEqual(history(store, ALICE, false), ['1:event:4', '1:event:3', '1:event:1', '1:extrinsic:1']);
+    // her transfer's event stays for bob, who did not sign it; his own request's event goes
+    assert.deepEqual(history(store, ALICE, true), ['1:event:3', '1:extrinsic:1']);
+    assert.deepEqual(history(store, BOB, false), ['1:event:2', '1:event:1', '1:extrinsic:2', '1:extrinsic:1']);
+    assert.deepEqual(history(store, BOB, true), ['1:event:1', '1:extrinsic:2', '1:extrinsic:1']);
+    store.close();
+  });
+});
+
 describe('block times and genesis', () => {
   it('gives the timestamp of each indexed block asked for, null for the others', () => {
     fill(store, 3);
@@ -643,6 +671,9 @@ describe('identities', () => {
   });
 });
 
+/** Takes back schema step 5, so that a database written by this code passes for an older one. */
+const UNDO_DETAIL = 'DROP INDEX account_links_main; ALTER TABLE account_links DROP COLUMN detail;';
+
 describe('schema versions', () => {
   let dir: string;
   beforeEach(() => {
@@ -664,11 +695,11 @@ describe('schema versions', () => {
     const a = new ExplorerStore(path);
     write(a, fixture(1));
     a.close();
-    assert.equal(version(path), 4);
+    assert.equal(version(path), 5);
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 1);
     b.close();
-    assert.equal(version(path), 4);
+    assert.equal(version(path), 5);
   });
 
   it('adds the signed-extrinsics index to a database of version 1, rows kept', () => {
@@ -677,13 +708,13 @@ describe('schema versions', () => {
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec("DROP INDEX extrinsics_signed; DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 1");
+    raw.exec("DROP INDEX extrinsics_signed; DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; " + UNDO_DETAIL + " PRAGMA user_version = 1");
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 3);
     assert.deepEqual(ids(b.extrinsics(null, 10, { signed: true }).items), ['3-2', '3-1', '2-2', '2-1', '1-2', '1-1']);
     b.close();
-    assert.equal(version(path), 4);
+    assert.equal(version(path), 5);
     const check = new DatabaseSync(path);
     assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'extrinsics_signed'").get());
     check.close();
@@ -695,13 +726,13 @@ describe('schema versions', () => {
     fillRows(a, 3);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec("DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 2");
+    raw.exec("DROP INDEX extrinsics_pallet_signed; DROP INDEX extrinsics_by_signer_pallet; DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; " + UNDO_DETAIL + " PRAGMA user_version = 2");
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.lastIndexed(), 3);
     assert.equal(b.extrinsics(null, 10, { pallet: 'balances', signed: true }).items.length, b.extrinsics(null, 10, { pallet: 'balances' }).items.length);
     b.close();
-    assert.equal(version(path), 4);
+    assert.equal(version(path), 5);
     const check = new DatabaseSync(path);
     for (const name of ['extrinsics_pallet_signed', 'extrinsics_by_signer_pallet']) {
       assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name), name);
@@ -748,14 +779,30 @@ describe('schema versions', () => {
     assert.equal(a.counts().identities, 1);
     a.close();
     const raw = new DatabaseSync(path);
-    raw.exec("DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; PRAGMA user_version = 3");
+    raw.exec("DROP TABLE identities; DELETE FROM totals WHERE name = 'identities'; " + UNDO_DETAIL + " PRAGMA user_version = 3");
     raw.close();
     const b = new ExplorerStore(path);
     assert.equal(b.counts().identities, 1);
     write(b, withIdentity(fixture(4), [['FieldSet', BOB]]));
     assert.equal(b.counts().identities, 2);
     b.close();
-    assert.equal(version(path), 4);
+    assert.equal(version(path), 5);
+  });
+
+  it('marks the details of a database of version 4 as new blocks are marked', () => {
+    const path = join(dir, 'explorer.db');
+    const a = new ExplorerStore(path);
+    write(a, withReward());
+    const expected = [history(a, ALICE, true), history(a, BOB, true)];
+    a.close();
+    const raw = new DatabaseSync(path);
+    raw.exec(`${UNDO_DETAIL} PRAGMA user_version = 4`);
+    raw.close();
+    const b = new ExplorerStore(path);
+    assert.deepEqual([history(b, ALICE, true), history(b, BOB, true)], expected);
+    assert.equal(history(b, ALICE, false).length, 4);
+    b.close();
+    assert.equal(version(path), 5);
   });
 
   it('refuses a database written by a newer version', () => {

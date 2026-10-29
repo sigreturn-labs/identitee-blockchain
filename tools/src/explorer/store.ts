@@ -298,7 +298,29 @@ const STEPS: string[] = [
     WHERE latest = 1 AND who IS NOT NULL AND method NOT IN ('IdentityCleared', 'IdentityPurged');
   INSERT INTO totals (name, n) VALUES ('identities', (SELECT count(*) FROM identities));
   `,
+  `
+  -- detail = 1: an event the history of the address hides unless asked (see isDetail)
+  ALTER TABLE account_links ADD COLUMN detail INTEGER NOT NULL DEFAULT 0;
+  UPDATE account_links SET detail = 1
+    WHERE kind = 1 AND EXISTS (
+      SELECT 1 FROM events e WHERE e.block = account_links.block AND e.idx = account_links.item_index AND (
+        (e.extrinsic_index IS NULL AND e.pallet = 'balances' AND e.method = 'Minted')
+        OR EXISTS (SELECT 1 FROM extrinsics x WHERE x.block = e.block AND x.idx = e.extrinsic_index AND x.signer = account_links.address)
+      )
+    );
+  CREATE INDEX account_links_main ON account_links (address, block, kind, item_index) WHERE detail = 0;
+  `,
 ];
+
+/**
+ * An event the history of `address` hides unless asked: the block reward (`balances.Minted` outside
+ * any extrinsic), and any event of an extrinsic `address` signed, which that extrinsic already shows
+ * (fees, its effects). Schema step 5 applies the same rule to the rows written before it.
+ */
+function isDetail(address: string, e: EventRow, signerOf: (extrinsicIndex: number) => string | null | undefined): boolean {
+  if (e.extrinsicIndex === null) return e.pallet === 'balances' && e.method === 'Minted';
+  return signerOf(e.extrinsicIndex) === address;
+}
 
 /**
  * Identitee events after which an account holds an identity, and those after which it holds none.
@@ -617,11 +639,15 @@ export class ExplorerStore {
       for (const e of evs) insertEv.run(e.block, e.index, e.extrinsicIndex, e.pallet, e.method, json(e.data), e.sentence);
 
       const insertAccount = db.prepare('INSERT OR IGNORE INTO accounts (address, first_block) VALUES (?, ?)');
-      const insertLink = db.prepare('INSERT OR IGNORE INTO account_links (address, block, kind, item_index) VALUES (?, ?, ?, ?)');
+      const insertLink = db.prepare('INSERT OR IGNORE INTO account_links (address, block, kind, item_index, detail) VALUES (?, ?, ?, ?, ?)');
+      const eventById = new Map(evs.map((e) => [e.id, e]));
+      const signerOf = (index: number) => xts.find((x) => x.index === index)?.signer;
       let newAccounts = 0;
       for (const l of links) {
         newAccounts += Number(insertAccount.run(l.address, l.block).changes);
-        insertLink.run(l.address, l.block, KIND_RANK[l.itemKind], position(l.itemId)!.index);
+        const event = l.itemKind === 'event' ? eventById.get(l.itemId) : undefined;
+        const detail = event !== undefined && isDetail(l.address, event, signerOf);
+        insertLink.run(l.address, l.block, KIND_RANK[l.itemKind], position(l.itemId)!.index, detail ? 1 : 0);
       }
 
       const insertTransfer = db.prepare('INSERT INTO transfers (block, idx, from_addr, to_addr, amount, extrinsic_id) VALUES (?, ?, ?, ?, ?, ?)');
@@ -777,19 +803,20 @@ export class ExplorerStore {
   /**
    * The extrinsics and events that mention `address`, newest first; within a block the events
    * come before the extrinsics. `cursor` is the `next` of the previous page (`<block>-x|e-<index>`).
+   * `main` leaves out the details: block rewards and the events of the address's own extrinsics.
    */
-  accountHistory(address: string, cursor: string | null, limit: number): Page<HistoryItem> {
+  accountHistory(address: string, cursor: string | null, limit: number, main = false): Page<HistoryItem> {
     checkLimit(limit);
-    let older = '1';
+    let where = main ? 'detail = 0' : '1';
     const params: SQLInputValue[] = [address];
     if (cursor !== null) {
       const m = HISTORY_RE.exec(cursor);
       if (m === null) throw new BadCursorError(cursor);
-      older = '(block, kind, item_index) < (?, ?, ?)';
+      where += ' AND (block, kind, item_index) < (?, ?, ?)';
       params.push(Number(m[1]), m[2] === 'x' ? KIND_RANK.extrinsic : KIND_RANK.event, Number(m[3]));
     }
     const links = this.db
-      .prepare(`SELECT block, kind, item_index FROM account_links WHERE address = ? AND ${older} ORDER BY block DESC, kind DESC, item_index DESC LIMIT ?`)
+      .prepare(`SELECT block, kind, item_index FROM account_links WHERE address = ? AND ${where} ORDER BY block DESC, kind DESC, item_index DESC LIMIT ?`)
       .all(...params, limit + 1) as unknown as Array<{ block: number; kind: number; item_index: number }>;
     const getXt = this.db.prepare('SELECT * FROM extrinsics WHERE block = ? AND idx = ?');
     const getEv = this.db.prepare('SELECT * FROM events WHERE block = ? AND idx = ?');

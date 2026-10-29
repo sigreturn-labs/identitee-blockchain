@@ -350,7 +350,7 @@ extrinsics that are final are sent with `Cache-Control: public, max-age=300`, th
 | `/api/events` | `pallet`, `method` | events, newest first, with a sentence for those the explorer explains (every identitee event) |
 | `/api/identities` | `a` | display name, username, trust level and avatar hash of up to 50 comma-separated addresses, keyed as given |
 | `/api/account/<address or hex key>` | | balance, nonce, identity summary, roles, profile link |
-| `/api/account/<address>/history` | | its extrinsics and events |
+| `/api/account/<address>/history` | `all=1` | its extrinsics and the events about it; `all=1` adds the details: block rewards and the events of its own extrinsics |
 | `/api/account/<address>/transfers` | | its transfers |
 | `/api/avatar/<address>` | | the avatar set on chain, as `image/webp` (`max-age=300`); 404 without one |
 | `/api/authorities` | | authorities with their agents and capabilities |
@@ -358,7 +358,7 @@ extrinsics that are final are sent with `Cache-Control: public, max-age=300`, th
 | `/api/attestations` | `authority` | requests, attestations, revocations and rejections |
 | `/api/migrations`, `/api/usernames` | | the matching event feeds |
 | `/api/runtime` | | current spec, version history with the block of each upgrade, pallets from the metadata |
-| `/api/network` | | validators (Aura and GRANDPA keys with labels), peer count, block time |
+| `/api/network` | | validators (Aura and GRANDPA keys with the account owning each and their labels), peer count, block time |
 | `/api/search` | `q` | what the term is: `block`, `extrinsic`, `account`, `username` or `none`, with its target |
 | `/api/live` | | Server-Sent Events: a `head` event with best, finalized and indexed when one moves |
 

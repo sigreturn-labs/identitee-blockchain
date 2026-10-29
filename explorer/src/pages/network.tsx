@@ -3,23 +3,28 @@ import type { Network as NetworkData } from "../api.ts";
 import { useApi } from "../data.ts";
 import { formatNumber, shortHash } from "../format.ts";
 import { Row } from "../ui/fields.tsx";
-import { ErrorCard, Section, Skeleton, Table } from "../ui/table.tsx";
+import { AccountLink, ErrorCard, Section, Skeleton, Table } from "../ui/table.tsx";
 
-type Validator = { label: string | null; aura: string | null; grandpa: string | null };
+type Validator = { account: string | null; label: string | null; aura: string | null; grandpa: string | null };
 
-/** One row per validator: the Aura and GRANDPA keys that carry the same label are one node. */
+/** One row per validator: the Aura and GRANDPA keys owned by the same account are one validator,
+ * and, for keys without an owner (a runtime without sessions), those that carry the same label. */
 export function validators(v: NetworkData["validators"]): Validator[] {
   const rows: Validator[] = [];
+  const byAccount = new Map<string, Validator>();
   const byLabel = new Map<string, Validator>();
   for (const a of v.aura) {
-    const row = { label: a.label, aura: a.key, grandpa: null };
+    // `?? null`: an API older than the owners leaves them out
+    const row = { account: a.account ?? null, label: a.label, aura: a.key, grandpa: null };
     rows.push(row);
-    if (a.label !== null) byLabel.set(a.label, row);
+    if (row.account !== null) byAccount.set(row.account, row);
+    else if (a.label !== null) byLabel.set(a.label, row);
   }
   for (const g of v.grandpa) {
-    const same = g.label !== null ? byLabel.get(g.label) : undefined;
+    const account = g.account ?? null;
+    const same = account !== null ? byAccount.get(account) : g.label !== null ? byLabel.get(g.label) : undefined;
     if (same && same.grandpa === null) same.grandpa = g.key;
-    else rows.push({ label: g.label, aura: null, grandpa: g.key });
+    else rows.push({ account, label: g.label, aura: null, grandpa: g.key });
   }
   return rows;
 }
@@ -64,7 +69,10 @@ export function Network() {
               rows={validators(data.validators)}
               rowKey={(v) => `${v.aura ?? ""}${v.grandpa ?? ""}`}
               columns={[
-                { label: "Validator", cell: (v) => v.label ?? <span class="x-quiet">No label</span> },
+                {
+                  label: "Validator",
+                  cell: (v) => (v.account !== null ? <AccountLink address={v.account} /> : (v.label ?? <span class="x-quiet">Unknown</span>)),
+                },
                 { label: "Aura key", cell: (v) => <Key k={v.aura} what="Aura key" /> },
                 { label: "GRANDPA key", cell: (v) => <Key k={v.grandpa} what="GRANDPA key" /> },
                 { label: "Roles", cell: (v) => [v.aura && "Producing", v.grandpa && "Finalizing"].filter(Boolean).join(", ") },
