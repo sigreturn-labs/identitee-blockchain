@@ -21,13 +21,9 @@ The public testnet runs at `wss://rpc.identit.ee`. Its web front, [identit.ee](h
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A["Person<br/>publishes a profile"] --> B["Fields<br/>public or private"]
-    B --> C["Authority<br/>checks a field<br/>or a document"]
-    C --> D["Attestation<br/>bound to the field's<br/>commitment"]
-    D --> E["Trust level<br/>computed by the chain"]
-```
+<p align="center">
+  <img src="docs/images/how-it-works.webp" alt="How it works: a person publishes a profile, each field public or private; an authority checks a field; the attestation is recorded on chain, bound to the field's commitment; the chain derives the trust level" width="100%">
+</p>
 
 1. A person writes their profile from the web front or any Polkadot wallet. Writes are feeless.
 2. They ask an authority to check a field. The verification service handles email, X, Discord,
@@ -51,6 +47,30 @@ flowchart LR
   <img src="docs/images/profile-mobile.webp" alt="A profile on a phone" width="240">
 </p>
 
+## Explorer
+
+[explorer.identit.ee](https://explorer.identit.ee) shows the testnet as it runs: blocks and the
+validator that produced each one, extrinsics decoded into named arguments, events, accounts with their
+identity and roles, authorities and their attestations, usernames, migrations from the People Chain,
+the runtime and the network. It is read only and public.
+
+<p align="center">
+  <img src="docs/images/explorer-home.webp" alt="The explorer's overview: chain figures, latest blocks with their producer, latest extrinsics" width="880">
+</p>
+
+<p align="center">
+  <img src="docs/images/explorer-account.webp" alt="An account in the explorer: its identity, username, balance and history" width="436">
+  &nbsp;
+  <img src="docs/images/explorer-attestations.webp" alt="Attestations recorded by an authority, in the explorer" width="436">
+</p>
+
+## Run a node
+
+Anyone can run a full node of the testnet from the binary published with each
+[release](https://github.com/sigreturn-labs/identitee-blockchain/releases). Validators are
+permissioned: [Running a validator](docs/VALIDATOR.md) covers the whole setup, from an empty server
+to producing blocks, and how to ask to join the set.
+
 ## Repository
 
 | Path | Contents |
@@ -61,14 +81,15 @@ flowchart LR
 | `tools` | TypeScript services and tooling: the People Chain migrator, the verification service, the explorer's indexer and API, end-to-end scenarios |
 | `web` | The web front, a Preact single-page application |
 | `explorer` | The block explorer's front, a Preact single-page application that reads the explorer API |
-| `deploy` | Release build, systemd units, nginx configuration, backups, testnet chain spec |
-| `docs` | Architecture, verification service, operations, manual testing, DID format |
+| `deploy` | Release build, systemd units (including a validator unit), nginx configuration, backups, testnet chain spec |
+| `docs` | Architecture, verification service, running a validator, operations, manual testing, DID format |
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md): the identity model and how the components fit together
 - [Verification service](docs/VERIFIER.md): how fields and documents are checked and attested
-- [Operations](docs/OPERATIONS.md): building, deploying and running a node and its services
+- [Running a validator](docs/VALIDATOR.md): from an empty server to a validator of the testnet
+- [Operations](docs/OPERATIONS.md): building, deploying and running the network's node and its services
 - [Manual testing](docs/TESTING.md): exercising the chain from polkadot.js/apps
 - [DID method](docs/DID.md): the planned `did:identitee` format
 - [Tools](tools/README.md), [web front](web/README.md) and [explorer](explorer/README.md): developer guides for each package
