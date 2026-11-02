@@ -1,0 +1,64 @@
+# identitee testnet validator, for a validator operator other than the network's operator. Install
+# as /etc/systemd/system/identitee-node.service and replace <your-validator-name>. See
+# docs/VALIDATOR.md.
+#
+# RPC listens on 127.0.0.1:9944 only and serves safe methods: nothing outside the host can reach it,
+# and nothing on the host can insert or rotate keys through it. P2P is on tcp/30333.
+# No --force-authoring: a validator cut off from its peers must stop producing rather than fork.
+
+[Unit]
+Description=identitee testnet node (validator)
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=identitee
+Group=identitee
+ExecStart=/usr/local/bin/identitee-node \
+	--chain /etc/identitee/identitee-testnet-raw.json \
+	--base-path /var/lib/identitee \
+	--node-key-file /var/lib/identitee/node-key \
+	--validator \
+	--name <your-validator-name> \
+	--bootnodes /dns/rpc.identit.ee/tcp/30333/p2p/12D3KooWDdpoKG1W5B8da4DSwTQ1WpbSBLG67V1czucqRwFnqbpz \
+	--listen-addr /ip4/0.0.0.0/tcp/30333 \
+	--no-mdns \
+	--rpc-port 9944 \
+	--rpc-methods safe
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+LimitNOFILE=65536
+
+# Hardening: the node only writes its base path. Not MemoryDenyWriteExecute: wasmtime compiles the
+# runtime to native code at run time. Not ProcSubset=pid: it hides /proc/meminfo and the node then
+# runs without its shared trie cache.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/identitee
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

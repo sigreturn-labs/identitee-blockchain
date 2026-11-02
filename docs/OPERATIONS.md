@@ -210,7 +210,8 @@ identitee-node --chain deploy/chainspec/identitee-testnet-raw.json \
   --bootnodes /dns/rpc.identit.ee/tcp/30333/p2p/12D3KooWDdpoKG1W5B8da4DSwTQ1WpbSBLG67V1czucqRwFnqbpz
 ```
 
-A full node does not produce or finalize blocks. To make it a validator, see "Validators".
+A full node does not produce or finalize blocks. To make it a validator, see "Validators", and
+[VALIDATOR.md](VALIDATOR.md) for the full setup on the validator's side.
 
 ### Validators
 
