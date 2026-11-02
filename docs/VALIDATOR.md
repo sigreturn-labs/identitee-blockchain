@@ -14,7 +14,8 @@ operator who is not the network's operator. The network's own node and services 
   turn, in a fixed order. A validator that is offline leaves its slots empty: the block time stretches,
   nothing else breaks.
 - **GRANDPA finalizes them.** A block is final once more than two thirds of the validators have voted
-  for it. With two validators both must be online; with three, one can be away; with four, still one.
+  for it. With two or three validators all must be online; from four, one can be away; from seven,
+  two.
   When too many are away, blocks keep coming but finality waits, then catches up when they return.
 - **Sessions last 10 minutes (100 blocks).** A change to the set takes effect at the start of the
   session after next, so within 20 minutes of being submitted.

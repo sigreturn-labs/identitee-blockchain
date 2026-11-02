@@ -236,8 +236,8 @@ rotates its own keys with `session.setKeys` (with the ownership proof its node p
 them with `session.purgeKeys`.
 
 GRANDPA finalizes with more than two thirds of the voters: with two validators, both must be online,
-or finality stops until the missing one returns, then catches up. Three validators tolerate one
-offline. With several validators, Aura also stops producing on a node left without any peer, unless
+or finality stops until the missing one returns, then catches up. Three validators still need all
+three; four tolerate one offline. With several validators, Aura also stops producing on a node left without any peer, unless
 it runs with `--force-authoring`: the operator's node does (`deploy/identitee-node.service`), so blocks
 keep coming in its slots while the other validators are away.
 
