@@ -268,6 +268,11 @@ describe('sentence', () => {
     assert.equal(sentence('system', 'NewAccount', { account: ALICE }, ctx), `Account ${a} created`);
     assert.equal(sentence('sudo', 'Sudid', { sudo_result: { Ok: null } }, ctx), 'Sudo call succeeded');
     assert.equal(sentence('sudo', 'Sudid', { sudo_result: { Err: { BadOrigin: null } } }, ctx), 'Sudo call failed');
+    assert.equal(sentence('proxy', 'ProxyExecuted', { result: { Ok: null } }, ctx), 'Proxy call succeeded');
+    assert.equal(sentence('proxy', 'ProxyExecuted', { result: { Err: { Module: { index: 0, error: '0x05000000' } } } }, ctx), 'Proxy call failed');
+    assert.equal(sentence('proxy', 'ProxyAdded', { delegator: ALICE, delegatee: BOB, proxy_type: 'Sudo', delay: 0 }, ctx), `${b} added as proxy of ${a}`);
+    assert.equal(sentence('proxy', 'ProxyRemoved', { delegator: ALICE, delegatee: BOB, proxy_type: 'Sudo', delay: 0 }, ctx), `${b} removed as proxy of ${a}`);
+    assert.equal(sentence('proxy', 'ProxyExecuted', {}, ctx), null);
   });
 
   it('reads the data of a decoded event', () => {

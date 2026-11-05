@@ -1,5 +1,5 @@
 // One plain English sentence per event the explorer explains: every identitee event, plus
-// transfers, new accounts and sudo results. Reads the JSON of `eventData` (decode.ts).
+// transfers, new accounts, sudo and proxy results. Reads the JSON of `eventData` (decode.ts).
 
 export interface SentenceContext {
   /** The registered name of an authority, or null if unknown. */
@@ -176,6 +176,16 @@ export function sentence(pallet: string, method: string, data: Data, ctx: Senten
       if (result === 'Ok') return 'Sudo call succeeded';
       if (result === 'Err') return 'Sudo call failed';
       throw new Malformed('sudo_result');
+    }
+    if (pallet === 'proxy' && method === 'ProxyExecuted') {
+      const [result] = variant(data.result);
+      if (result === 'Ok') return 'Proxy call succeeded';
+      if (result === 'Err') return 'Proxy call failed';
+      throw new Malformed('result');
+    }
+    if (pallet === 'proxy' && (method === 'ProxyAdded' || method === 'ProxyRemoved')) {
+      const verb = method === 'ProxyAdded' ? 'added as' : 'removed as';
+      return `${shorten(str(data, 'delegatee'))} ${verb} proxy of ${shorten(str(data, 'delegator'))}`;
     }
     return null;
   } catch (e) {

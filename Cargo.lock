@@ -4465,6 +4465,7 @@ dependencies = [
  "pallet-balances",
  "pallet-grandpa",
  "pallet-identitee",
+ "pallet-proxy",
  "pallet-session",
  "pallet-skip-feeless-payment",
  "pallet-sudo",
@@ -6913,6 +6914,17 @@ dependencies = [
  "polkadot-sdk-frame",
  "scale-info",
  "sp-mmr-primitives",
+]
+
+[[package]]
+name = "pallet-proxy"
+version = "49.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "672d860a15450954533cb25457ec5958e1a7686e8aff47fdf524f718dbb3d8e7"
+dependencies = [
+ "parity-scale-codec",
+ "polkadot-sdk-frame",
+ "scale-info",
 ]
 
 [[package]]

@@ -33,7 +33,7 @@ flowchart LR
 | Component | Path | Role |
 |---|---|---|
 | Node | `node/` | `identitee-node`: Aura block production, GRANDPA finality, JSON-RPC, chain spec presets |
-| Runtime | `runtime/` | System, Timestamp, Aura, GRANDPA, Balances, TransactionPayment, Sudo, SkipFeelessPayment and Identitee; the `IdentiteeApi` runtime API; the `CheckNonceOnboard` transaction extension |
+| Runtime | `runtime/` | System, Timestamp, Aura, GRANDPA, Balances, TransactionPayment, Sudo, SkipFeelessPayment, Identitee, Validators, Session, Authorship and Proxy (sudo proxies only); the `IdentiteeApi` runtime API; the `CheckNonceOnboard` transaction extension |
 | Pallet | `pallets/identitee/` | Identities, fields, authorities, attestations, facts, trust levels, names, sub-accounts, migration, quotas, identity secret |
 | Migration service | `tools/src/migrator.ts` | Off-chain agent with the migrate capability: serves `request_migration` by reading the People Chains |
 | Verification service | `tools/src/verifier/` | Off-chain agent that attests fields and records document checks once a person proves control ([VERIFIER.md](VERIFIER.md)) |

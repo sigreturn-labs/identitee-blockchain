@@ -1,13 +1,15 @@
 //! Configuration of each pallet of the runtime.
 
 // Substrate and Polkadot dependencies
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	derive_impl,
 	dispatch::DispatchClass,
 	parameter_types,
 	traits::{
 		fungible::{Balanced, Credit},
-		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, OnUnbalanced, VariantCountOf,
+		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, InstanceFilter, OnUnbalanced,
+		VariantCountOf,
 	},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
@@ -16,9 +18,10 @@ use frame_support::{
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
+use scale_info::TypeInfo;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_runtime::{
-	traits::{ConvertInto, One, OpaqueKeys},
+	traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys},
 	Perbill,
 };
 use sp_version::RuntimeVersion;
@@ -224,4 +227,65 @@ impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
 	/// It earns the block reward.
 	type EventHandler = Validators;
+}
+
+/// What a proxy may do for the account that added it. There is one kind, so it is also the default,
+/// which `pallet_proxy` requires to be the most permissive.
+#[derive(
+	Copy,
+	Clone,
+	Default,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Debug,
+	MaxEncodedLen,
+	TypeInfo,
+)]
+pub enum ProxyType {
+	/// `sudo` and `sudo_unchecked_weight` only: a second operator key next to the sudo key, which
+	/// the sudo account adds and removes. The wrapped call may not be a sudo call, so the proxy
+	/// cannot change or remove the sudo key by mistake. It still acts as root: this is not a
+	/// limit against a hostile key holder.
+	#[default]
+	Sudo,
+}
+
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, call: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Sudo => match call {
+				RuntimeCall::Sudo(
+					pallet_sudo::Call::sudo { call }
+					| pallet_sudo::Call::sudo_unchecked_weight { call, .. },
+				) => !matches!(**call, RuntimeCall::Sudo(_)),
+				_ => false,
+			},
+		}
+	}
+
+	fn is_superset(&self, other: &Self) -> bool {
+		self == other
+	}
+}
+
+impl pallet_proxy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	/// Held from the account that adds proxies: 1 IDT, and 0.1 IDT more per proxy.
+	type ProxyDepositBase = ConstU128<UNIT>;
+	type ProxyDepositFactor = ConstU128<{ UNIT / 10 }>;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = ConstU128<UNIT>;
+	type AnnouncementDepositFactor = ConstU128<{ UNIT / 10 }>;
+	type BlockNumberProvider = System;
 }
