@@ -132,9 +132,9 @@ pub trait WeightInfo {
 	fn set_agent() -> Weight;
 	fn remove_agent() -> Weight;
 	fn set_authority_active() -> Weight;
-	fn request_judgement() -> Weight;
+	fn request_attestation() -> Weight;
 	fn cancel_request() -> Weight;
-	fn provide_judgement() -> Weight;
+	fn provide_attestation() -> Weight;
 	fn revoke_attestation() -> Weight;
 	fn reject_request() -> Weight;
 	fn grant_fact() -> Weight;
@@ -264,7 +264,7 @@ fn agent_check_proof_size() -> u64 {
 	agent_proof_size() + authority_proof_size()
 }
 
-fn request_judgement_weight<BN: MaxEncodedLen>(db: RuntimeDbWeight) -> Weight {
+fn request_attestation_weight<BN: MaxEncodedLen>(db: RuntimeDbWeight) -> Weight {
 	// Reads the identity, the authority, the request and the count; writes the last two.
 	db.reads_writes(4, 2).saturating_add(Weight::from_parts(
 		BASE_REF_TIME,
@@ -277,7 +277,7 @@ fn cancel_request_weight<BN: MaxEncodedLen>(db: RuntimeDbWeight) -> Weight {
 		.saturating_add(Weight::from_parts(BASE_REF_TIME, request_proof_size::<BN>()))
 }
 
-fn provide_judgement_weight<BN: MaxEncodedLen>(db: RuntimeDbWeight) -> Weight {
+fn provide_attestation_weight<BN: MaxEncodedLen>(db: RuntimeDbWeight) -> Weight {
 	// Agent check (2), identity, request and count; writes the attestation, request and count.
 	db.reads_writes(5, 3).saturating_add(Weight::from_parts(
 		BASE_REF_TIME,
@@ -682,14 +682,14 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.reads_writes(1, 1)
 			.saturating_add(Weight::from_parts(BASE_REF_TIME, authority_proof_size()))
 	}
-	fn request_judgement() -> Weight {
-		request_judgement_weight::<BlockNumberFor<T>>(T::DbWeight::get())
+	fn request_attestation() -> Weight {
+		request_attestation_weight::<BlockNumberFor<T>>(T::DbWeight::get())
 	}
 	fn cancel_request() -> Weight {
 		cancel_request_weight::<BlockNumberFor<T>>(T::DbWeight::get())
 	}
-	fn provide_judgement() -> Weight {
-		provide_judgement_weight::<BlockNumberFor<T>>(T::DbWeight::get())
+	fn provide_attestation() -> Weight {
+		provide_attestation_weight::<BlockNumberFor<T>>(T::DbWeight::get())
 	}
 	fn revoke_attestation() -> Weight {
 		revoke_attestation_weight::<BlockNumberFor<T>>(T::DbWeight::get())
@@ -857,14 +857,14 @@ impl WeightInfo for () {
 	fn set_authority_active() -> Weight {
 		Weight::from_parts(BASE_REF_TIME, authority_proof_size())
 	}
-	fn request_judgement() -> Weight {
-		request_judgement_weight::<u32>(NO_DB)
+	fn request_attestation() -> Weight {
+		request_attestation_weight::<u32>(NO_DB)
 	}
 	fn cancel_request() -> Weight {
 		cancel_request_weight::<u32>(NO_DB)
 	}
-	fn provide_judgement() -> Weight {
-		provide_judgement_weight::<u32>(NO_DB)
+	fn provide_attestation() -> Weight {
+		provide_attestation_weight::<u32>(NO_DB)
 	}
 	fn revoke_attestation() -> Weight {
 		revoke_attestation_weight::<u32>(NO_DB)

@@ -94,7 +94,7 @@ fn fill_identity(who: u64) -> Vec<FieldKey> {
 
 /// Authority `authority` gives `verdict` on the current value of `key` of `who`.
 fn attest(authority: u32, who: u64, key: &FieldKey, verdict: Verdict) {
-	assert_ok!(Identitee::provide_judgement(
+	assert_ok!(Identitee::provide_attestation(
 		RuntimeOrigin::signed(agent(authority)),
 		who,
 		key.clone(),
@@ -503,7 +503,7 @@ fn clear_identity_reports_what_it_deleted() {
 		attest(0, OWNER, &email, Verdict::Verified);
 		claim(OWNER, "ada");
 		grant(0, FactKind::DocumentChecked);
-		assert_ok!(Identitee::request_judgement(
+		assert_ok!(Identitee::request_attestation(
 			signed(OWNER),
 			1,
 			Target::Fact(FactKind::DocumentChecked)
@@ -600,7 +600,7 @@ fn clearing_the_fullest_identity_stays_within_what_it_declares() {
 			for authority in 0..MAX_AUTHORITIES {
 				grant(authority, FactKind::DocumentChecked);
 				grant(authority, FactKind::Fraud);
-				assert_ok!(Identitee::request_judgement(
+				assert_ok!(Identitee::request_attestation(
 					signed(OWNER),
 					authority,
 					Target::Fact(FactKind::DocumentChecked)

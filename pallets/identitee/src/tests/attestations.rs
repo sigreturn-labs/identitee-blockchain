@@ -75,7 +75,7 @@ fn attest_with(
 	verdict: Verdict,
 	expires_at: Option<u64>,
 ) -> DispatchResult {
-	Identitee::provide_judgement(
+	Identitee::provide_attestation(
 		RuntimeOrigin::signed(agent),
 		USER,
 		key,
@@ -101,7 +101,7 @@ fn valid(key: FieldKey, authority: AuthorityId) -> bool {
 }
 
 fn request(authority: AuthorityId, target: Target) -> DispatchResult {
-	Identitee::request_judgement(RuntimeOrigin::signed(USER), authority, target)
+	Identitee::request_attestation(RuntimeOrigin::signed(USER), authority, target)
 }
 
 fn grant(agent: u64, kind: FactKind, expires_at: Option<u64>) -> DispatchResult {
@@ -398,7 +398,7 @@ fn rejected_verdict_is_stored() {
 	ext().execute_with(|| {
 		set_public(USER, EMAIL, b"a@tempmail.example");
 		let now = System::block_number();
-		assert_ok!(Identitee::provide_judgement(
+		assert_ok!(Identitee::provide_attestation(
 			RuntimeOrigin::signed(ATTESTER),
 			USER,
 			EMAIL,
@@ -444,7 +444,7 @@ fn reattesting_overwrites() {
 		));
 		set_public(USER, EMAIL, b"b@x.org");
 		System::set_block_number(5);
-		assert_ok!(Identitee::provide_judgement(
+		assert_ok!(Identitee::provide_attestation(
 			RuntimeOrigin::signed(ATTESTER),
 			USER,
 			EMAIL,
@@ -573,7 +573,7 @@ fn migration_method_is_reserved() {
 	ext().execute_with(|| {
 		set_public(USER, EMAIL, b"a@x.org");
 		assert_noop!(
-			Identitee::provide_judgement(
+			Identitee::provide_attestation(
 				RuntimeOrigin::signed(ATTESTER),
 				USER,
 				EMAIL,
@@ -725,7 +725,7 @@ fn clear_identity_drops_attestations_and_requests() {
 	ext().execute_with(|| {
 		const NEIGHBOUR: u64 = 2;
 		set_public(NEIGHBOUR, EMAIL, b"n@x.org");
-		assert_ok!(Identitee::request_judgement(
+		assert_ok!(Identitee::request_attestation(
 			RuntimeOrigin::signed(NEIGHBOUR),
 			ALPHA,
 			Target::Field(EMAIL)
@@ -762,7 +762,7 @@ fn clear_identity_drops_attestations_and_requests() {
 fn agent_calls_are_feeless_only_with_the_capability_they_need() {
 	use crate::Call;
 	ext().execute_with(|| {
-		let attest_call = Call::<Test>::provide_judgement {
+		let attest_call = Call::<Test>::provide_attestation {
 			who: USER,
 			key: EMAIL,
 			expected_commitment: H256::zero(),
@@ -951,7 +951,7 @@ fn bot_challenge_is_stored() {
 		let telegram = FieldKey::Typed(FieldKind::Telegram);
 		set_public(USER, telegram.clone(), b"ada");
 		System::set_block_number(3);
-		assert_ok!(Identitee::provide_judgement(
+		assert_ok!(Identitee::provide_attestation(
 			RuntimeOrigin::signed(ATTESTER),
 			USER,
 			telegram.clone(),

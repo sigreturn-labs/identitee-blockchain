@@ -141,8 +141,10 @@ function chainTarget(target: RequestTarget): object {
 }
 
 /** Ask `authority` to check a field, a link or a fact about the person. */
-export async function requestJudgementCall(authority: number, target: RequestTarget): Promise<Call> {
-  return (await identitee()).requestJudgement(authority, chainTarget(target));
+export async function requestAttestationCall(authority: number, target: RequestTarget): Promise<Call> {
+  const idt = await identitee();
+  // Runtimes before 12 name it requestJudgement.
+  return (idt.requestAttestation ?? idt.requestJudgement)(authority, chainTarget(target));
 }
 
 /** Withdraw a request, to the authority it was made to. */
@@ -251,10 +253,12 @@ export type Verdict = "Verified" | "Rejected";
  * `Verified`, or `Rejected` (the value was checked and refused; it counts as not verified while the
  * field keeps it). The verdict holds while the field keeps the commitment `expected`, which the
  * caller read from the chain just before. */
-export async function provideJudgementCall(who: string, ref: AttestationRef, expected: Hex, verdict: Verdict = "Verified"): Promise<Call> {
+export async function provideAttestationCall(who: string, ref: AttestationRef, expected: Hex, verdict: Verdict = "Verified"): Promise<Call> {
   if (!/^0x[0-9a-f]{64}$/i.test(expected)) throw new Refusal("The commitment of the field could not be read.");
   if (verdict !== "Verified" && verdict !== "Rejected") throw new Refusal("Choose a verdict.");
-  return (await identitee()).provideJudgement(accountKey(who), chainKey(ref), expected, verdict, "Manual", null);
+  const idt = await identitee();
+  // Runtimes before 12 name it provideJudgement.
+  return (idt.provideAttestation ?? idt.provideJudgement)(accountKey(who), chainKey(ref), expected, verdict, "Manual", null);
 }
 
 /** Refuse the request of `who` for `target`, with a reason and a short note carried by the event. */

@@ -11,7 +11,7 @@ Code: `tools/src/verifier/`. Developer reference (every route, request and respo
 
 | Field or check | Channel | Proof | On chain |
 |---|---|---|---|
-| Email | `email` | A 6-digit code sent to the address | `provide_judgement`, method `EmailCode` |
+| Email | `email` | A 6-digit code sent to the address | `provide_attestation`, method `EmailCode` |
 | X | `x` | OAuth 2 sign-in | `OAuth` |
 | Discord | `discord` | OAuth 2 sign-in | `OAuth` |
 | GitHub | `github` | OAuth sign-in | `OAuth` |
@@ -21,13 +21,13 @@ Code: `tools/src/verifier/`. Developer reference (every route, request and respo
 | PGP | `pgp` | A signature of a one-time challenge by the key whose fingerprint the field holds | `PgpSignature` |
 | Identity document | `kyc` | A document and selfie check at Didit | `grant_fact(DocumentChecked)` |
 
-Every field attestation is `provide_judgement(who, key, commitment, Verified, method, None)`, where
+Every field attestation is `provide_attestation(who, key, commitment, Verified, method, None)`, where
 `commitment` is the one the service read when the proof started. If the field changes before the
 attestation lands, the runtime refuses it (`StaleCommitment`) and the person is asked to verify again.
 
 The service never records `Rejected` verdicts or `Fraud` facts: a failed proof writes nothing, and the
 person corrects the value and tries again. Fraud findings, custom fields and links stay manual work for
-an authority agent, through `request_judgement` and the authority page. `DisplayName` and `LegalName`
+an authority agent, through `request_attestation` and the authority page. `DisplayName` and `LegalName`
 are not verifiable.
 
 ## How a verification runs
@@ -47,7 +47,7 @@ sequenceDiagram
     P->>X: Receive it or sign in
     X->>V: Proof
     V->>V: Compare the proven account with the field
-    V->>N: provide_judgement(commitment, Verified, method)
+    V->>N: provide_attestation(commitment, Verified, method)
     N-->>W: The field shows as verified
 ```
 

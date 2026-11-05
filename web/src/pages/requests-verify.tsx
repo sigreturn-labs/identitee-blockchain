@@ -7,7 +7,7 @@
 // A private field is checked with a verification packet, made on /me (the authority needs the
 // value, which the chain never holds): the row says so as soon as a request is waiting.
 
-import { cancelRequestCall, requestJudgementCall } from "../chain/calls.ts";
+import { cancelRequestCall, requestAttestationCall } from "../chain/calls.ts";
 import { groupHex, LIMITS } from "../chain/edit.ts";
 import type { Overview } from "../chain/overview.ts";
 import { REQUEST_AUTHORITY, type VerifyItem, verifyItems } from "../chain/requests.ts";
@@ -71,7 +71,7 @@ export function VerifySection({ overview, acting }: { overview: Overview; acting
                         type="button"
                         aria-label={`${item.standing === "Rejected" ? "Request again" : "Request"} verification of ${item.label}`}
                         disabled={acting.pending || !takes || full}
-                        onClick={() => void acting.run("verify", () => requestJudgementCall(REQUEST_AUTHORITY, item.target), "Request sent.", undefined, item.id)}
+                        onClick={() => void acting.run("verify", () => requestAttestationCall(REQUEST_AUTHORITY, item.target), "Request sent.", undefined, item.id)}
                       >
                         {item.standing === "Rejected" ? "Request again" : "Request"}
                       </button>

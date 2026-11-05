@@ -626,7 +626,7 @@ fn set_fields_clearing_removes_attestations() {
 		let github = FieldKey::Typed(FieldKind::GitHub);
 		for (key, v) in [(&email, &b"a@b.c"[..]), (&github, &b"octo"[..])] {
 			assert_ok!(Identitee::set_field(RuntimeOrigin::signed(1), key.clone(), public(v)));
-			assert_ok!(Identitee::provide_judgement(
+			assert_ok!(Identitee::provide_attestation(
 				RuntimeOrigin::signed(10),
 				1,
 				key.clone(),

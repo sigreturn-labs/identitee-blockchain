@@ -129,7 +129,7 @@ through agents: accounts that serve exactly one authority and hold a set of capa
 
 | Bit | Capability | Allows |
 |---|---|---|
-| 1 | `ATTEST_FIELDS` | `provide_judgement`, `revoke_attestation`, refusing field requests |
+| 1 | `ATTEST_FIELDS` | `provide_attestation`, `revoke_attestation`, refusing field requests |
 | 2 | `PERSON_FACTS` | `grant_fact`, `revoke_fact`, refusing fact requests |
 | 4 | `MANAGE_NAMES` | `reserve_username`, `unreserve_username`, `set_username_for`, `unbind_username` |
 | 8 | `MIGRATE` | `fulfil_migration`, `reject_migration` |
@@ -144,7 +144,7 @@ development preset uses `//Alice` (all capabilities, sudo) and `//Bob` (`8`).
 
 ## Requests, attestations and facts
 
-A person may ask an authority to check a field or to record a fact (`request_judgement(authority,
+A person may ask an authority to check a field or to record a fact (`request_attestation(authority,
 target)`, withdrawn with `cancel_request`); at most 16 pending requests per account. Requests are
 optional: an agent can attest or grant without one, and doing so consumes the matching request.
 `reject_request` refuses a request with a reason code and a note of up to 128 bytes.
@@ -159,7 +159,7 @@ A field attestation is stored per (account, field, authority):
 | `issued_at`, `expires_at` | Blocks; an expiry must lie in the future |
 | `revoked` | Block and reason code, if revoked |
 
-`provide_judgement(who, key, expected_commitment, verdict, method, expires_at)` takes the commitment the
+`provide_attestation(who, key, expected_commitment, verdict, method, expires_at)` takes the commitment the
 agent checked. If the field has changed since, the call fails with `StaleCommitment`, so an authority
 can never attest a value it did not see.
 

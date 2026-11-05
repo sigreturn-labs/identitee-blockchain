@@ -655,7 +655,7 @@ fn migration_method_cannot_be_forged_by_attest_field() {
 			FieldValue::Public(value(b"a@x.org"))
 		));
 		assert_noop!(
-			Identitee::provide_judgement(
+			Identitee::provide_attestation(
 				RuntimeOrigin::signed(ATTESTER),
 				USER,
 				EMAIL,

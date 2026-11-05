@@ -130,12 +130,12 @@ for (const [who, key, commitment] of [
   [people.dave, "GitHub", commitments.dave.GitHub],
   [people.eve, "Email", commitments.eve.Email],
 ]) {
-  await ok(idt.provideJudgement(who.address, { Typed: key }, commitment, "Verified", "Manual", null), alice);
+  await ok(idt.provideAttestation(who.address, { Typed: key }, commitment, "Verified", "Manual", null), alice);
 }
 // and refuses one: a rejected field shows as Rejected, not Pending
-await ok(idt.provideJudgement(people.charlie.address, { Typed: "Web" }, publicCommitment("https://rivers.example"), "Rejected", "Manual", null), alice);
+await ok(idt.provideAttestation(people.charlie.address, { Typed: "Web" }, publicCommitment("https://rivers.example"), "Rejected", "Manual", null), alice);
 await ok(idt.grantFact(people.eve.address, "DocumentChecked", null, "Unspecified", hex("passport seen")), alice);
-console.log("judgements written");
+console.log("attestations written");
 
 // A verified field is enough to take a name; then sub-accounts: eve and ferdie join dave.
 await Promise.all([

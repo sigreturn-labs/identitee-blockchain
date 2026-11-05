@@ -1,5 +1,5 @@
 // The verifier's view of the chain: a typed field of an account as the chain holds it now
-// (`identiteeApi.profile`), and the two writes of the agent, `provide_judgement` and
+// (`identiteeApi.profile`), and the two writes of the agent, `provide_attestation` and
 // `grant_fact(DocumentChecked)`, sent one at a time so that the agent's nonce is never contended.
 // The commitment a proof started with goes as `expected_commitment`: a field changed meanwhile
 // makes the runtime refuse (`StaleCommitment`), which comes back as `stale`.
@@ -51,7 +51,7 @@ export interface Chain {
   decodeAddress(address: string): Uint8Array;
   /** Field `key` of `address` now, `null` if the account has no identity or no such field. */
   field(address: string, key: FieldKey): Promise<FieldOnChain | null>;
-  /** `provide_judgement(who, key, commitment, Verified, method, None)`. */
+  /** `provide_attestation(who, key, commitment, Verified, method, None)`. */
   attest(address: string, key: FieldKey, commitment: string, method: Method): Promise<AttestResult>;
   /** `grant_fact(who, DocumentChecked, None, Unspecified, "")`. */
   grantDocument(address: string): Promise<AttestResult>;
@@ -166,7 +166,11 @@ export class LiveChain implements Chain {
   attest(address: string, key: FieldKey, commitment: string, method: Method): Promise<AttestResult> {
     const who = u8aToHex(publicKeyOf(address));
     return this.enqueue(
-      () => (this.api.tx as Json).identitee.provideJudgement(who, { Typed: key.Typed }, commitment, 'Verified', method, null),
+      () => {
+        const idt = (this.api.tx as Json).identitee;
+        // Runtimes before 12 name it provideJudgement.
+        return (idt.provideAttestation ?? idt.provideJudgement)(who, { Typed: key.Typed }, commitment, 'Verified', method, null);
+      },
       { who: encodeAddress(who, SS58_PREFIX), field: key.Typed, method },
     );
   }

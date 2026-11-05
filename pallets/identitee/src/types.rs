@@ -443,7 +443,7 @@ pub enum Method {
 	WebFile,
 	Manual,
 	/// Imported from a registrar judgement on a People Chain, at a source block. Set by the
-	/// migration only, never by `provide_judgement`.
+	/// migration only, never by `provide_attestation`.
 	MigratedFromPeopleChain {
 		source: SourceChain,
 		registrar: u32,

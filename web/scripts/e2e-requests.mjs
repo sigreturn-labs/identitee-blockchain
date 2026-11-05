@@ -317,7 +317,7 @@ console.log(`\n== verification (${values.tag}) ==`);
   check((await pending(main)).length === 2, "two requests on the chain");
 
   // a typed field asked about outside this page is listed, so that it can be taken back
-  await onChain(idt.requestJudgement(0, { Field: { Typed: "Email" } }), main);
+  await onChain(idt.requestAttestation(0, { Field: { Typed: "Email" } }), main);
   await page.reload({ waitUntil: "networkidle0" });
   await waitSelector(page, ask("Cancel the request for Email"));
   check((await rowState(page, "Email")) === "Pending", "a request for a typed field made elsewhere is listed as Pending, with a Cancel");
@@ -345,7 +345,7 @@ console.log(`\n== verification (${values.tag}) ==`);
   check(!(await page.$$eval(`${VERIFY} .ask-label`, (els) => els.map((e) => e.textContent.trim()))).includes("Email"), "and its row goes away");
 
   // the authority answers while the page is open: the page finds out by itself
-  await onChain(idt.provideJudgement(main.address, { Custom: hex("mastodon") }, publicCommitment(MASTODON), "Verified", "Manual", null), alice);
+  await onChain(idt.provideAttestation(main.address, { Custom: hex("mastodon") }, publicCommitment(MASTODON), "Verified", "Manual", null), alice);
   await waitRowState(page, "mastodon", "Verified");
   check(true, "the page showed Verified without being touched (it reads the chain again while a request waits)");
   check((await pending(main)).length === 1, "the answered request is gone from the chain");

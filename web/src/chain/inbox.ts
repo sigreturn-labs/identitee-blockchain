@@ -7,7 +7,7 @@
 // and keeps its authority's rows (at most 16 per account, few accounts on a young chain). Rows and
 // the identities they point at are read at one block, so a row never shows a value of another moment.
 //
-// A verdict is tied to the value it was made for: `provide_judgement` takes the commitment the
+// A verdict is tied to the value it was made for: `provide_attestation` takes the commitment the
 // agent expects and the runtime refuses it if the field holds another one. The page reads that
 // commitment from the chain just before each verdict (`commitmentNow`), never from what it showed.
 

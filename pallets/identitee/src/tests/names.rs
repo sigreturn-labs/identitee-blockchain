@@ -73,7 +73,7 @@ fn judge(
 	verdict: Verdict,
 	expires_at: Option<u64>,
 ) -> DispatchResult {
-	Identitee::provide_judgement(
+	Identitee::provide_attestation(
 		RuntimeOrigin::signed(agent),
 		who,
 		key,
@@ -238,7 +238,7 @@ fn custom_fields_and_links_qualify() {
 		let url = value(b"https://ada.example");
 		assert_ok!(Identitee::add_link(RuntimeOrigin::signed(OTHER), title.clone(), url.clone()));
 		assert_noop!(claim(OTHER, "bob"), Error::<Test>::NoVerifiedField);
-		assert_ok!(Identitee::provide_judgement(
+		assert_ok!(Identitee::provide_attestation(
 			RuntimeOrigin::signed(ATTESTER),
 			OTHER,
 			FieldKey::Link(0),

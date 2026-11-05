@@ -249,7 +249,7 @@ async function selftest(): Promise<number> {
       authority = Number((await (rpc.query as Json).identitee.nextAuthorityId()).toString());
       sent.sudo = await send(rpc, alice, tx.sudo.sudo(tx.identitee.addAuthority(stringToHex('selftest'))));
       assert(sent.sudo.events.includes('identitee.AuthorityRegistered'), `no AuthorityRegistered: ${sent.sudo.events}`);
-      sent.request = await send(rpc, charlie, tx.identitee.requestJudgement(authority, { Field: { Typed: 'Email' } }));
+      sent.request = await send(rpc, charlie, tx.identitee.requestAttestation(authority, { Field: { Typed: 'Email' } }));
       same(sent.request.error, null, 'request error');
       sent.failed = await send(rpc, bob, tx.sudo.sudo(tx.system.remark('0xff')));
       same(sent.failed.error, 'sudo.RequireSudo', 'the failing call');

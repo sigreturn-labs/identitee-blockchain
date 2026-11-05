@@ -64,7 +64,7 @@ fn attest_with(
 	verdict: Verdict,
 	expires_at: Option<u64>,
 ) -> DispatchResult {
-	Identitee::provide_judgement(
+	Identitee::provide_attestation(
 		RuntimeOrigin::signed(agent),
 		USER,
 		key,

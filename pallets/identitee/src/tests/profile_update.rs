@@ -103,7 +103,7 @@ fn link_ids(who: u64) -> Vec<u32> {
 /// The verdict of [`AGENT`] on link `id` of `who`, as it stands now.
 fn attest_link(who: u64, id: u32) {
 	let key = FieldKey::Link(id);
-	assert_ok!(Identitee::provide_judgement(
+	assert_ok!(Identitee::provide_attestation(
 		RuntimeOrigin::signed(AGENT),
 		who,
 		key.clone(),

@@ -905,17 +905,17 @@ pub mod pallet {
 		/// Ask `authority` to check a field of the caller's identity or to record a fact about
 		/// them. At most `MaxPendingRequests` pending requests per account.
 		#[pallet::call_index(30)]
-		#[pallet::weight(T::WeightInfo::request_judgement())]
+		#[pallet::weight(T::WeightInfo::request_attestation())]
 		#[pallet::feeless_if(|origin: &OriginFor<T>, _authority: &AuthorityId, _target: &Target| -> bool {
 			Pallet::<T>::user_call_feeless(origin)
 		})]
-		pub fn request_judgement(
+		pub fn request_attestation(
 			origin: OriginFor<T>,
 			authority: AuthorityId,
 			target: Target,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_request_judgement(&who, authority, target)
+			Self::do_request_attestation(&who, authority, target)
 		}
 
 		/// Withdraw a pending request.
@@ -938,14 +938,14 @@ pub mod pallet {
 		/// [`crate::types::commitment`] and [`crate::types::link_commitment`]). Replaces the
 		/// authority's previous attestation of that field and consumes the matching request.
 		#[pallet::call_index(32)]
-		#[pallet::weight(T::WeightInfo::provide_judgement())]
+		#[pallet::weight(T::WeightInfo::provide_attestation())]
 		#[pallet::feeless_if(
 			|origin: &OriginFor<T>, _who: &T::AccountId, _key: &FieldKey, _expected: &H256,
 			 _verdict: &Verdict, _method: &Method, _expires_at: &Option<BlockNumberFor<T>>| -> bool {
 				Pallet::<T>::agent_call_feeless(origin, Capabilities::ATTEST_FIELDS)
 			}
 		)]
-		pub fn provide_judgement(
+		pub fn provide_attestation(
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			key: FieldKey,
@@ -955,7 +955,7 @@ pub mod pallet {
 			expires_at: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let agent = ensure_signed(origin)?;
-			Self::do_provide_judgement(
+			Self::do_provide_attestation(
 				&agent,
 				who,
 				key,

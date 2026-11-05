@@ -115,7 +115,7 @@ const DISPATCH_MESSAGES: Record<string, string> = {
  * the calls `Call::counts_against_quota` (pallets/identitee/src/quota.rs) answers `false` for.
  * test/tx.test.ts compares the two. */
 export const AGENT_CALLS: ReadonlySet<string> = new Set([
-  "provideJudgement",
+  "provideAttestation",
   "revokeAttestation",
   "rejectRequest",
   "grantFact",

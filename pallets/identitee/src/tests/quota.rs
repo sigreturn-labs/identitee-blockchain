@@ -172,9 +172,9 @@ fn all_calls() -> Vec<crate::Call<Test>> {
 		crate::Call::set_agent { authority: 0, agent: 1, caps: 1 },
 		crate::Call::remove_agent { agent: 1 },
 		crate::Call::set_authority_active { authority: 0, active: true },
-		crate::Call::request_judgement { authority: 0, target: Target::Fact(FactKind::Fraud) },
+		crate::Call::request_attestation { authority: 0, target: Target::Fact(FactKind::Fraud) },
 		crate::Call::cancel_request { authority: 0, target: Target::Fact(FactKind::Fraud) },
-		crate::Call::provide_judgement {
+		crate::Call::provide_attestation {
 			who: 2,
 			key: FieldKey::Typed(FieldKind::Email),
 			expected_commitment: Default::default(),
@@ -274,7 +274,7 @@ fn user_calls_count_against_the_quota() {
 		"clear_avatar",
 		"reveal_field",
 		"clear_identity",
-		"request_judgement",
+		"request_attestation",
 		"cancel_request",
 		"claim_username",
 		"release_username",

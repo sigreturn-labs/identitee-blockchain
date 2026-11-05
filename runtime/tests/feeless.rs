@@ -673,7 +673,7 @@ fn runtime_api_profile_roundtrip() {
 				Ok(Ok(()))
 			);
 		}
-		let attest = RuntimeCall::Identitee(pallet_identitee::Call::provide_judgement {
+		let attest = RuntimeCall::Identitee(pallet_identitee::Call::provide_attestation {
 			who: user.clone(),
 			key: email.clone(),
 			expected_commitment: commitment(&FieldValue::Public(

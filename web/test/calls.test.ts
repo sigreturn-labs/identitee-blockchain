@@ -16,7 +16,7 @@ const names = [
   "reorderLinks",
   "setAvatar",
   "clearAvatar",
-  "requestJudgement",
+  "requestAttestation",
   "cancelRequest",
   "claimUsername",
   "releaseUsername",
@@ -28,7 +28,7 @@ const names = [
   "renameSub",
   "requestMigration",
   "cancelMigration",
-  "provideJudgement",
+  "provideAttestation",
   "rejectRequest",
   "revokeAttestation",
   "grantFact",
@@ -53,7 +53,7 @@ import {
   releaseUsernameCall,
   removeSubCall,
   renameSubCall,
-  requestJudgementCall,
+  requestAttestationCall,
   requestMigrationCall,
   removeLinkCall,
   reorderLinksCall,
@@ -67,7 +67,7 @@ import {
   updateProfileCall,
   updateSize,
   grantFactCall,
-  provideJudgementCall,
+  provideAttestationCall,
   REASONS,
   rejectRequestCall,
   reserveUsernameCall,
@@ -300,14 +300,27 @@ describe("the calls of the requests page", () => {
   const PARENT = "idnLHSmv5dsrPchjHig4iKyALqy5nLX46MbvkgTKPvLFc5QQz";
 
   it("ask authority 0 to check a field, a custom field, a link or a fact, in the chain's shapes", async () => {
-    await requestJudgementCall(0, { field: { typed: "Email" } });
+    await requestAttestationCall(0, { field: { typed: "Email" } });
+    expect(tx.requestAttestation).toHaveBeenLastCalledWith(0, { Field: { Typed: "Email" } });
+    await requestAttestationCall(0, { field: { custom: "mastodon" } });
+    expect(tx.requestAttestation).toHaveBeenLastCalledWith(0, { Field: { Custom: "0x6d6173746f646f6e" } });
+    await requestAttestationCall(0, { field: { link: 3 } });
+    expect(tx.requestAttestation).toHaveBeenLastCalledWith(0, { Field: { Link: 3 } });
+    await requestAttestationCall(0, { fact: "DocumentChecked" });
+    expect(tx.requestAttestation).toHaveBeenLastCalledWith(0, { Fact: "DocumentChecked" });
+  });
+
+  it("fall back to the names of runtimes before 12", async () => {
+    delete tx.requestAttestation;
+    delete tx.provideAttestation;
+    tx.requestJudgement = vi.fn();
+    tx.provideJudgement = vi.fn();
+    await requestAttestationCall(0, { field: { typed: "Email" } });
     expect(tx.requestJudgement).toHaveBeenLastCalledWith(0, { Field: { Typed: "Email" } });
-    await requestJudgementCall(0, { field: { custom: "mastodon" } });
-    expect(tx.requestJudgement).toHaveBeenLastCalledWith(0, { Field: { Custom: "0x6d6173746f646f6e" } });
-    await requestJudgementCall(0, { field: { link: 3 } });
-    expect(tx.requestJudgement).toHaveBeenLastCalledWith(0, { Field: { Link: 3 } });
-    await requestJudgementCall(0, { fact: "DocumentChecked" });
-    expect(tx.requestJudgement).toHaveBeenLastCalledWith(0, { Fact: "DocumentChecked" });
+    await provideAttestationCall(PARENT, { typed: "Email" }, `0x${"11".repeat(32)}`);
+    expect(tx.provideJudgement).toHaveBeenCalledTimes(1);
+    delete tx.requestJudgement;
+    delete tx.provideJudgement;
   });
 
   it("withdraw a request with the same target and the authority it was made to", async () => {
@@ -388,17 +401,17 @@ describe("the calls of an authority agent", () => {
   const key = async () => (await import("../src/chain/address.ts")).publicKeyHex(WHO);
 
   it("verify a field, a custom field or a link against the commitment given, by hand, for good", async () => {
-    await provideJudgementCall(WHO, { typed: "Email" }, C);
-    expect(tx.provideJudgement).toHaveBeenLastCalledWith(await key(), { Typed: "Email" }, C, "Verified", "Manual", null);
-    await provideJudgementCall(WHO, { custom: "phone" }, C);
-    expect(tx.provideJudgement).toHaveBeenLastCalledWith(await key(), { Custom: "0x70686f6e65" }, C, "Verified", "Manual", null);
-    await provideJudgementCall(WHO, { link: 2 }, C);
-    expect(tx.provideJudgement).toHaveBeenLastCalledWith(await key(), { Link: 2 }, C, "Verified", "Manual", null);
-    await expect(provideJudgementCall(WHO, { link: 2 }, "0x12" as never)).rejects.toThrow(Refusal);
-    expect(tx.provideJudgement).toHaveBeenCalledTimes(3);
-    await provideJudgementCall(WHO, { typed: "Email" }, C, "Rejected");
-    expect(tx.provideJudgement).toHaveBeenLastCalledWith(await key(), { Typed: "Email" }, C, "Rejected", "Manual", null);
-    await expect(provideJudgementCall(WHO, { typed: "Email" }, C, "Maybe" as never)).rejects.toThrow("Choose a verdict.");
+    await provideAttestationCall(WHO, { typed: "Email" }, C);
+    expect(tx.provideAttestation).toHaveBeenLastCalledWith(await key(), { Typed: "Email" }, C, "Verified", "Manual", null);
+    await provideAttestationCall(WHO, { custom: "phone" }, C);
+    expect(tx.provideAttestation).toHaveBeenLastCalledWith(await key(), { Custom: "0x70686f6e65" }, C, "Verified", "Manual", null);
+    await provideAttestationCall(WHO, { link: 2 }, C);
+    expect(tx.provideAttestation).toHaveBeenLastCalledWith(await key(), { Link: 2 }, C, "Verified", "Manual", null);
+    await expect(provideAttestationCall(WHO, { link: 2 }, "0x12" as never)).rejects.toThrow(Refusal);
+    expect(tx.provideAttestation).toHaveBeenCalledTimes(3);
+    await provideAttestationCall(WHO, { typed: "Email" }, C, "Rejected");
+    expect(tx.provideAttestation).toHaveBeenLastCalledWith(await key(), { Typed: "Email" }, C, "Rejected", "Manual", null);
+    await expect(provideAttestationCall(WHO, { typed: "Email" }, C, "Maybe" as never)).rejects.toThrow("Choose a verdict.");
   });
 
   it("reject a request with a reason and a trimmed note of at most 128 bytes", async () => {

@@ -33,7 +33,7 @@
 //!
 //! Imported fields are public. The attestations and facts are written for the agent's
 //! authority, with the method `MigratedFromPeopleChain { source, registrar, block }` (which
-//! `provide_judgement` refuses), no expiry, and count like any other for the trust level and names.
+//! `provide_attestation` refuses), no expiry, and count like any other for the trust level and names.
 //! Facts have the reason `Unspecified` and an empty note. A fact of the same kind that the
 //! authority already recorded about the person is left as it is (revoked or not, with its expiry,
 //! reason and note): a migration never overwrites an authority's own decision.

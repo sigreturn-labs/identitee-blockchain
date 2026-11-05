@@ -174,6 +174,7 @@ describe('walkCall', () => {
     assert.deepEqual(walked, { pallet: 'identitee', method: 'claim_username', args: { name: 'alice' }, inner: [] });
   });
 
+  // The recorded metadata is that of runtime 11, where provide_attestation was still provide_judgement.
   it('keeps snake case argument names and decodes enums', () => {
     const walked = walkCall(
       call('Identitee', 'provide_judgement', {

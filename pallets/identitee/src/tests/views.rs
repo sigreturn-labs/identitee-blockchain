@@ -45,7 +45,7 @@ fn set(who: u64, key: FieldKey, v: &[u8]) {
 }
 
 fn judge(agent: u64, who: u64, key: FieldKey, v: &[u8], verdict: Verdict) {
-	assert_ok!(Identitee::provide_judgement(
+	assert_ok!(Identitee::provide_attestation(
 		RuntimeOrigin::signed(agent),
 		who,
 		key,

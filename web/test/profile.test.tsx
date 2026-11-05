@@ -40,7 +40,7 @@ function draw(profile: Profile, parentLink: { title: string; path: string } | nu
   render(<ProfileView profile={profile} parent={parentLink} pending={pending} own={own} />, root);
   return root;
 }
-/** A judgement request waiting at authority 0, for the field or link with this id. */
+/** An attestation request waiting at authority 0, for the field or link with this id. */
 function asked(...ids: string[]): PendingRequest[] {
   return ids.map((id, i) => {
     const [kind, key] = id.split(":") as ["typed" | "custom" | "link", string];

@@ -21,7 +21,7 @@ const { readOverview, nameStatus, readProfile, readBlock, send, calls } = vi.hoi
   nameStatus: vi.fn(),
   send: vi.fn(),
   calls: {
-    requestJudgementCall: vi.fn(),
+    requestAttestationCall: vi.fn(),
     cancelRequestCall: vi.fn(),
     claimUsernameCall: vi.fn(),
     releaseUsernameCall: vi.fn(),
@@ -89,7 +89,7 @@ let world: Overview;
 function apply({ call, args }: { call: string; args: any[] }) {
   const same = (a: string) => (m: { address: string }) => sameAccount(m.address, a);
   switch (call) {
-    case "requestJudgementCall":
+    case "requestAttestationCall":
       world.pending.push({ authority: args[0], target: args[1], since: 1001 });
       break;
     case "cancelRequestCall":
@@ -241,9 +241,9 @@ describe("verification", () => {
   it("asks authority 0 when Request is pressed, and shows Pending only once the chain holds the request", async () => {
     await open();
     await click(byLabel("Request verification of mastodon"));
-    expect(calls.requestJudgementCall).toHaveBeenCalledWith(0, { field: { custom: "mastodon" } });
+    expect(calls.requestAttestationCall).toHaveBeenCalledWith(0, { field: { custom: "mastodon" } });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]![0]).toEqual({ call: "requestJudgementCall", args: [0, { field: { custom: "mastodon" } }] });
+    expect(send.mock.calls[0]![0]).toEqual({ call: "requestAttestationCall", args: [0, { field: { custom: "mastodon" } }] });
     expect(send.mock.calls[0]![1]).toEqual({ address: USER, signer: {} });
     const mastodon = rows("Verification requests")[0]!;
     expect(text(mastodon.querySelector(".state"))).toBe("Pending");
@@ -285,7 +285,7 @@ describe("verification", () => {
     await open();
     await click(byLabel("Request verification of mastodon"));
     await click(byLabel("Request verification of Website"));
-    expect(calls.requestJudgementCall.mock.calls).toEqual([
+    expect(calls.requestAttestationCall.mock.calls).toEqual([
       [0, { field: { custom: "mastodon" } }],
       [0, { field: { link: 0 } }],
     ]);
@@ -303,7 +303,7 @@ describe("verification", () => {
     const website = rows("Verification requests").find((li) => text(li.querySelector(".ask-label")) === "Website")!;
     expect(text(website.querySelector(".state"))).toBe("Rejected");
     await click(byLabel("Request again verification of Website"));
-    expect(calls.requestJudgementCall).toHaveBeenCalledWith(0, { field: { link: 0 } });
+    expect(calls.requestAttestationCall).toHaveBeenCalledWith(0, { field: { link: 0 } });
   });
 
   it("points a private field to its verification packet once a request is waiting", async () => {

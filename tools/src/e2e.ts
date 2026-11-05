@@ -553,18 +553,18 @@ async function mainScenario(chain: Chain, alice: Account): Promise<void> {
     await chain.expectTrust(parent, 'Declared');
   });
 
-  await step('request_judgement(authority 0, Field(Email))', async () => {
-    await chain.ok(parent, api.tx.identitee.requestJudgement(0, { Field: emailKey }), ['identitee.AttestationRequested']);
+  await step('request_attestation(authority 0, Field(Email))', async () => {
+    await chain.ok(parent, api.tx.identitee.requestAttestation(0, { Field: emailKey }), ['identitee.AttestationRequested']);
     const pending = await api.query.identitee.pendingRequests(parent.address, [0, { Field: emailKey }]);
     assert(json(pending) !== null, 'the request is not in PendingRequests');
   });
 
-  await step('Alice provide_judgement Email with the commitment read on chain: PartiallyVerified', async () => {
+  await step('Alice provide_attestation Email with the commitment read on chain: PartiallyVerified', async () => {
     const commitment = await chain.fieldCommitment(parent.address, 'Email');
     same(u8aToHex(commitment), u8aToHex(publicCommitment(stringToU8a(email))), 'on-chain email commitment');
     await chain.ok(
       alice,
-      api.tx.identitee.provideJudgement(parent.address, emailKey, u8aToHex(commitment), 'Verified', 'EmailCode', null),
+      api.tx.identitee.provideAttestation(parent.address, emailKey, u8aToHex(commitment), 'Verified', 'EmailCode', null),
       ['identitee.FieldAttested'],
     );
     const profile = await chain.profileOf(parent);
@@ -582,7 +582,7 @@ async function mainScenario(chain: Chain, alice: Account): Promise<void> {
     same(u8aToHex(commitment), u8aToHex(telegramCommitment), 'on-chain telegram commitment');
     await chain.ok(
       alice,
-      api.tx.identitee.provideJudgement(parent.address, telegramKey, u8aToHex(commitment), 'Verified', 'Manual', null),
+      api.tx.identitee.provideAttestation(parent.address, telegramKey, u8aToHex(commitment), 'Verified', 'Manual', null),
       ['identitee.FieldAttested'],
     );
     await chain.expectTrust(parent, 'FullyVerified');

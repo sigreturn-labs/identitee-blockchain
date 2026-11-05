@@ -13,7 +13,7 @@
 // soon as it has been checked or the verdict sent.
 
 import { useState } from "preact/hooks";
-import { grantFactCall, provideJudgementCall, REASONS, type Reason, rejectRequestCall, type Verdict } from "../chain/calls.ts";
+import { grantFactCall, provideAttestationCall, REASONS, type Reason, rejectRequestCall, type Verdict } from "../chain/calls.ts";
 import { LIMITS } from "../chain/edit.ts";
 import type { FieldRef } from "../chain/identity.ts";
 import { type CheckedPacket, checkPacket, commitmentNow, genesisHash, type InboxItem, profileNow } from "../chain/inbox.ts";
@@ -120,7 +120,7 @@ export function InboxSection({ desk, items, acting, reload }: { desk: Desk; item
           changed = true;
           throw new Refusal("The field changed since the page was read. Look at it again.");
         }
-        return provideJudgementCall(item.who, ref, now.commitment, verdict);
+        return provideAttestationCall(item.who, ref, now.commitment, verdict);
       },
       `${item.label} ${VERDICT_DONE[verdict]}.`,
       undefined,
@@ -262,7 +262,7 @@ function PacketPanel({ item, fieldRef, acting, onClose }: { item: InboxItem; fie
       async () => {
         const now = await commitmentNow(item.who, fieldRef);
         if (now?.commitment !== expected) throw new Refusal("The field changed since the packet was checked.");
-        return provideJudgementCall(item.who, fieldRef, expected, verdict);
+        return provideAttestationCall(item.who, fieldRef, expected, verdict);
       },
       `${item.label} ${VERDICT_DONE[verdict]}.`,
       undefined,

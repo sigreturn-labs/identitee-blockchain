@@ -89,7 +89,7 @@ impl<T: Config> Call<T> {
 			| Call::clear_avatar { .. }
 			| Call::reveal_field { .. }
 			| Call::clear_identity { .. }
-			| Call::request_judgement { .. }
+			| Call::request_attestation { .. }
 			| Call::cancel_request { .. }
 			| Call::claim_username { .. }
 			| Call::release_username { .. }
@@ -106,7 +106,7 @@ impl<T: Config> Call<T> {
 			| Call::set_agent { .. }
 			| Call::remove_agent { .. }
 			| Call::set_authority_active { .. }
-			| Call::provide_judgement { .. }
+			| Call::provide_attestation { .. }
 			| Call::revoke_attestation { .. }
 			| Call::reject_request { .. }
 			| Call::grant_fact { .. }

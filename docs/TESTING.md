@@ -122,10 +122,10 @@ an identity (otherwise `identitee.NoIdentity`).
 
 | # | Call | Expected |
 |---|---|---|
-| 2.1 | P: `requestJudgement(authority = 0, target = Field(Typed / Email))` | `identitee.AttestationRequested`; Chain state `identitee.pendingRequests(P, (0, Field(Typed Email)))` holds the request block |
-| 2.2 | A: `provideJudgement(who = P, key = Typed / Email, expectedCommitment = <commitment>, verdict = Verified, method = EmailCode, expiresAt = None)` | `identitee.FieldAttested`; free for A; the request disappears |
+| 2.1 | P: `requestAttestation(authority = 0, target = Field(Typed / Email))` | `identitee.AttestationRequested`; Chain state `identitee.pendingRequests(P, (0, Field(Typed Email)))` holds the request block |
+| 2.2 | A: `provideAttestation(who = P, key = Typed / Email, expectedCommitment = <commitment>, verdict = Verified, method = EmailCode, expiresAt = None)` | `identitee.FieldAttested`; free for A; the request disappears |
 | 2.3 | `identiteeApi.trustLevel(P)` | `PartiallyVerified` |
-| 2.4 | A: `provideJudgement(P, Typed / Telegram, 0xf5c4...7de0, Verified, Manual, None)` | `identitee.FieldAttested`; `trustLevel` = `FullyVerified` (every verifiable typed field present is verified) |
+| 2.4 | A: `provideAttestation(P, Typed / Telegram, 0xf5c4...7de0, Verified, Manual, None)` | `identitee.FieldAttested`; `trustLevel` = `FullyVerified` (every verifiable typed field present is verified) |
 | 2.5 | A: `grantFact(who = P, kind = DocumentChecked, expiresAt = None, reason = Unspecified, note = "ID document checked")` | `identitee.FactGranted`; `trustLevel` = `Certified` |
 
 `DisplayName` and `LegalName` are never verifiable and never block `FullyVerified`.
@@ -151,7 +151,7 @@ the call is refused instead of attesting something else.
 | # | Call | Expected |
 |---|---|---|
 | 2.6 | P: `setField(Typed / Email, Public("other@example.org"))` | `identitee.FieldSet`; the Email attestation turns `false`; `trustLevel` = `PartiallyVerified` (Telegram stays verified) |
-| 2.7 | A: `provideJudgement` with the old commitment `0x8875...f1f0` | `identitee.StaleCommitment` |
+| 2.7 | A: `provideAttestation` with the old commitment `0x8875...f1f0` | `identitee.StaleCommitment` |
 | 2.8 | P: `revealField(Typed / Telegram, "@alice", <wrong salt>)` | `identitee.RevealMismatch` |
 | 2.9 | P: `revealField(Typed / Telegram, "@alice", 0x1111...11)` | `identitee.FieldRevealed`; Telegram becomes `Public` and its attestation stays valid |
 

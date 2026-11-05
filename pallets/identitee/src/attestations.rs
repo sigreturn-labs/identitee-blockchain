@@ -52,7 +52,7 @@ pub(crate) struct FieldVerdicts {
 
 impl<T: Config> Pallet<T> {
 	/// Ask `authority` to check `target` on the identity of `who`.
-	pub(crate) fn do_request_judgement(
+	pub(crate) fn do_request_attestation(
 		who: &T::AccountId,
 		authority: AuthorityId,
 		target: Target,
@@ -88,7 +88,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Fails with `StaleCommitment` if the field changed since the agent checked it, so an
 	/// attestation always matches the value it was made for at the time it is written.
-	pub(crate) fn do_provide_judgement(
+	pub(crate) fn do_provide_attestation(
 		agent: &T::AccountId,
 		who: T::AccountId,
 		key: FieldKey,

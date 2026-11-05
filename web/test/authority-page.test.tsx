@@ -32,7 +32,7 @@ const { readAgent, readInbox, readReserved, readAccount, commitmentNow, profileN
   nameStatus: vi.fn(),
   send: vi.fn(),
   calls: {
-    provideJudgementCall: vi.fn(),
+    provideAttestationCall: vi.fn(),
     rejectRequestCall: vi.fn(),
     revokeAttestationCall: vi.fn(),
     grantFactCall: vi.fn(),
@@ -94,7 +94,7 @@ const inbox = (): InboxItem[] =>
 function apply({ call, args }: { call: string; args: any[] }) {
   const drop = (id: string) => (world.requests = world.requests.filter((r) => JSON.stringify(r.target) !== id));
   switch (call) {
-    case "provideJudgementCall":
+    case "provideAttestationCall":
       drop(JSON.stringify({ field: args[1] }));
       break;
     case "rejectRequestCall":
@@ -311,7 +311,7 @@ describe("requests", () => {
     await open();
     await click(byLabel(`Verify Email of ${WHO}`));
     expect(commitmentNow).toHaveBeenCalledWith(USER, { typed: "Email" });
-    expect(calls.provideJudgementCall).toHaveBeenCalledWith(USER, { typed: "Email" }, commitmentIn(world.profile, { typed: "Email" })!.commitment, "Verified");
+    expect(calls.provideAttestationCall).toHaveBeenCalledWith(USER, { typed: "Email" }, commitmentIn(world.profile, { typed: "Email" })!.commitment, "Verified");
     expect(text(section("Requests").querySelector(".status"))).toBe("Email verified.");
     expect(waiting().map((li) => text(li.querySelector(".ask-label")))).toEqual(["Telegram", "Code", "Identity document"]);
   });
@@ -319,14 +319,14 @@ describe("requests", () => {
   it("verifies a link against its title and address", async () => {
     await open();
     await click(byLabel(`Verify Code of ${WHO}`));
-    expect(calls.provideJudgementCall).toHaveBeenCalledWith(USER, { link: 1 }, commitmentIn(world.profile, { link: 1 })!.commitment, "Verified");
+    expect(calls.provideAttestationCall).toHaveBeenCalledWith(USER, { link: 1 }, commitmentIn(world.profile, { link: 1 })!.commitment, "Verified");
   });
 
   it("signs nothing when the field changed since the page was read", async () => {
     await open();
     world.profile = userProfile((raw) => (raw.identity.typed.Email = { public: u8aToHex(stringToU8a("other@example.org")) }));
     await click(byLabel(`Verify Email of ${WHO}`));
-    expect(calls.provideJudgementCall).not.toHaveBeenCalled();
+    expect(calls.provideAttestationCall).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
     expect(text(section("Requests").querySelector(".problem"))).toBe("The field changed since the page was read. Look at it again.");
     // the page read again: the row now shows the new value
@@ -336,20 +336,20 @@ describe("requests", () => {
   it("rejects the value of a field after a question, against the commitment read at that moment", async () => {
     await open();
     await click(byLabel(`Reject the value of Email of ${WHO}`));
-    expect(calls.provideJudgementCall).not.toHaveBeenCalled();
+    expect(calls.provideAttestationCall).not.toHaveBeenCalled();
     expect(text(root!.querySelector('[aria-label="Reject the value of Email"] .hint'))).toBe(
       "Record on the identity that this Email was checked and refused? It counts as not verified while the person keeps this value.",
     );
     await click(buttonNamed("Reject the value", root!.querySelector('[role="group"][aria-label="Reject the value of Email"]')!));
     expect(commitmentNow).toHaveBeenCalledWith(USER, { typed: "Email" });
-    expect(calls.provideJudgementCall).toHaveBeenCalledWith(USER, { typed: "Email" }, commitmentIn(world.profile, { typed: "Email" })!.commitment, "Rejected");
+    expect(calls.provideAttestationCall).toHaveBeenCalledWith(USER, { typed: "Email" }, commitmentIn(world.profile, { typed: "Email" })!.commitment, "Rejected");
     expect(text(section("Requests").querySelector(".status"))).toBe("Email rejected.");
   });
 
   it("verifies with the Verified verdict", async () => {
     await open();
     await click(byLabel(`Verify Code of ${WHO}`));
-    expect(calls.provideJudgementCall.mock.calls[0]![3]).toBe("Verified");
+    expect(calls.provideAttestationCall.mock.calls[0]![3]).toBe("Verified");
   });
 
   it("dismisses a request with the reason and the note chosen, recording nothing on the identity", async () => {
@@ -395,7 +395,7 @@ describe("a private field", () => {
     expect(text(root!.querySelector(".packet-value"))).toBe(SECRET_VALUE);
     await click(buttonNamed("Verify", root!.querySelector('[aria-label="Packet for Telegram"]')!));
     const commitment = privateCommitment(SALT, SECRET_VALUE);
-    expect(calls.provideJudgementCall).toHaveBeenCalledWith(USER, { typed: "Telegram" }, commitment, "Verified");
+    expect(calls.provideAttestationCall).toHaveBeenCalledWith(USER, { typed: "Telegram" }, commitment, "Verified");
     expect(text(section("Requests").querySelector(".status"))).toBe("Telegram verified.");
     expect(root!.innerHTML).not.toContain(SECRET_VALUE);
   });
@@ -413,13 +413,13 @@ describe("a private field", () => {
     await paste(await packetOf());
     const panel = root!.querySelector('[aria-label="Packet for Telegram"]')!;
     await click(byLabel("Reject the value of Telegram", panel));
-    expect(calls.provideJudgementCall).not.toHaveBeenCalled();
+    expect(calls.provideAttestationCall).not.toHaveBeenCalled();
     // the same question as for a field or a link
     expect(text(panel.querySelector('[role="group"][aria-label="Reject the value of Telegram"] .hint'))).toBe(
       "Record on the identity that this Telegram was checked and refused? It counts as not verified while the person keeps this value.",
     );
     await click(buttonNamed("Reject the value", panel.querySelector('[role="group"][aria-label="Reject the value of Telegram"]')!));
-    expect(calls.provideJudgementCall).toHaveBeenCalledWith(USER, { typed: "Telegram" }, privateCommitment(SALT, SECRET_VALUE), "Rejected");
+    expect(calls.provideAttestationCall).toHaveBeenCalledWith(USER, { typed: "Telegram" }, privateCommitment(SALT, SECRET_VALUE), "Rejected");
     expect(text(section("Requests").querySelector(".status"))).toBe("Telegram rejected.");
   });
 

@@ -117,7 +117,7 @@ export function Docs() {
                 <td>1</td>
                 <td>Attest fields</td>
                 <td>
-                  <C>provideJudgement</C>, <C>revokeAttestation</C>, refusing field requests
+                  <C>provideAttestation</C>, <C>revokeAttestation</C>, refusing field requests
                 </td>
               </tr>
               <tr>
@@ -184,7 +184,7 @@ export function Docs() {
           opened with the agent's wallet. It lists the requests waiting for the authority, checks private values against their verification
           packet, and signs the right call. By hand, the call is:
         </p>
-        <pre class="x-pre">provideJudgement(who, key, expectedCommitment, verdict, method, expiresAt)</pre>
+        <pre class="x-pre">provideAttestation(who, key, expectedCommitment, verdict, method, expiresAt)</pre>
         <ul>
           <li>
             <C>who</C>: the person's address. <C>key</C>: the field, for example <C>Typed / Email</C>, <C>Custom("city")</C> or <C>Link(0)</C>.
@@ -223,7 +223,7 @@ export function Docs() {
         <Calls
           label="Agent calls on fields"
           rows={[
-            ["provideJudgement", "who, key, expectedCommitment, verdict, method, expiresAt", "Records the verdict and consumes the matching request."],
+            ["provideAttestation", "who, key, expectedCommitment, verdict, method, expiresAt", "Records the verdict and consumes the matching request."],
             ["revokeAttestation", "who, key, reason", "Revokes the authority's attestation of that field."],
             ["rejectRequest", "who, target, reason, note", "Dismisses a request without recording anything on the identity. The note holds 128 bytes."],
           ]}
@@ -273,7 +273,7 @@ export function Docs() {
             ["setField", "key, value", "Sets a field, Public(bytes) or Private(commitment), creating the identity if needed."],
             ["setIdentity", "changes", "Up to 32 field changes in one transaction."],
             ["updateProfile", "update", "Bio, avatar, fields and links in one transaction."],
-            ["requestJudgement", "authority, target", "Asks an authority to check a field or record a fact. 16 pending requests at most."],
+            ["requestAttestation", "authority, target", "Asks an authority to check a field or record a fact. 16 pending requests at most."],
             ["cancelRequest", "authority, target", "Withdraws the request."],
             ["revealField", "key, value, salt", "Makes a private field public; its attestations stay valid."],
             ["claimUsername", "name", "Needs a verified field. 3 to 32 characters of a-z, 0-9, - and _."],

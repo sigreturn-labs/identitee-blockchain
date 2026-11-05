@@ -2,7 +2,7 @@
 # /etc/systemd/system/identitee-verifier.service. See docs/VERIFIER.md and docs/OPERATIONS.md.
 #
 # People prove they control an email, an account (X, Discord, GitHub, Telegram, Matrix), a website
-# or a PGP key, or pass a KYC check at Didit; the service records the attestation (provide_judgement)
+# or a PGP key, or pass a KYC check at Didit; the service records the attestation (provide_attestation)
 # or the fact (grant_fact DocumentChecked) signed by the verifier agent (authority 0, capabilities 3
 # = ATTEST_FIELDS | PERSON_FACTS). HTTP on 127.0.0.1:8787 behind nginx (deploy/nginx-verify.conf).
 #

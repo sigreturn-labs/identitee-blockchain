@@ -274,7 +274,7 @@ const { page: p, log: pLog } = await openPage(person, "Pat");
   // the verification service, so their requests are sent to the chain directly, as any wallet can
   await click(p, ask("Request verification of phone"));
   await waitText(p, 'section[aria-label="Verification"] .status', "Request sent.");
-  for (const typed of ["Email", "Web", "GitHub"]) await onChain(idt.requestJudgement(0, { Field: { Typed: typed } }), person);
+  for (const typed of ["Email", "Web", "GitHub"]) await onChain(idt.requestAttestation(0, { Field: { Typed: typed } }), person);
   const keys = await pendingKeys(person);
   check(
     JSON.stringify(keys) === JSON.stringify([`{"field":{"custom":"0x70686f6e65"}}`, `{"field":{"typed":"Email"}}`, `{"field":{"typed":"Web"}}`, `{"field":{"typed":"GitHub"}}`].sort()),

@@ -48,7 +48,7 @@ import {
   releaseUsernameCall,
   removeSubCall,
   renameSubCall,
-  requestJudgementCall,
+  requestAttestationCall,
   requestMigrationCall,
   removeLinkCall,
   reorderLinksCall,
@@ -59,7 +59,7 @@ import {
   setIdentitySecretCall,
   updateLinkCall,
   grantFactCall,
-  provideJudgementCall,
+  provideAttestationCall,
   rejectRequestCall,
   reserveUsernameCall,
   revokeAttestationCall,
@@ -195,11 +195,11 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     // The authority attests the values by their commitments, computed here and checked there:
     // a wrong formula would be refused with StaleCommitment.
     await ok(
-      idt().provideJudgement(user.address, { Typed: "Email" }, publicCommitment(email), "Verified", "Manual", null),
+      idt().provideAttestation(user.address, { Typed: "Email" }, publicCommitment(email), "Verified", "Manual", null),
       alice,
     );
     await ok(
-      idt().provideJudgement(user.address, { Link: 0 }, linkCommitment(title, url), "Verified", "Manual", null),
+      idt().provideAttestation(user.address, { Link: 0 }, linkCommitment(title, url), "Verified", "Manual", null),
       alice,
     );
     // And the private value is revealed under the salt: refused with RevealMismatch otherwise.
@@ -394,7 +394,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     // verification requests: every kind of target, read back through the table's own keys
     expect(await readAuthority()).toMatchObject({ id: 0, name: "identitee", active: true });
     for (const target of [{ field: { typed: "Email" } }, { field: { custom: "mastodon" } }, { field: { link: 0 } }, { fact: "DocumentChecked" }] as const) {
-      await ok(await requestJudgementCall(0, target), user);
+      await ok(await requestAttestationCall(0, target), user);
     }
     expect((await pendingRequestsOf(user.address)).map((r) => [r.authority, targetId(r.target)])).toEqual([
       [0, "typed:Email"],
@@ -402,7 +402,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
       [0, "link:0"],
       [0, "fact:DocumentChecked"],
     ]);
-    const again = await send(await requestJudgementCall(0, { field: { typed: "Email" } }), user);
+    const again = await send(await requestAttestationCall(0, { field: { typed: "Email" } }), user);
     expect(again).toMatchObject({ ok: false, errorName: "RequestExists", error: "You already asked for this check." });
     let profile = (await readProfile(user.address))!;
     expect(verifyItems(profile, await pendingRequestsOf(user.address)).map((i) => [i.id, i.standing])).toEqual([
@@ -418,7 +418,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     expect((await pendingRequestsOf(user.address)).map((r) => targetId(r.target))).toEqual(["typed:Email", "custom:mastodon"]);
 
     // the authority's answer takes the request away and the chain reads the field as verified
-    await ok(idt().provideJudgement(user.address, { Typed: "Email" }, publicCommitment(email), "Verified", "Manual", null), alice);
+    await ok(idt().provideAttestation(user.address, { Typed: "Email" }, publicCommitment(email), "Verified", "Manual", null), alice);
     expect((await pendingRequestsOf(user.address)).map((r) => targetId(r.target))).toEqual(["custom:mastodon"]);
     profile = (await readProfile(user.address))!;
     expect(verifyItems(profile, await pendingRequestsOf(user.address)).find((i) => i.id === "typed:Email")!.standing).toBe("Verified");
@@ -506,7 +506,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
   it("reads the whole requests page at one block", async () => {
     const user = fresh();
     await ok(await setIdentityCall([{ ref: { typed: "Email" }, value: stringToU8a(`one-${random()}@example.org`) }]), user);
-    await ok(await requestJudgementCall(0, { field: { typed: "Email" } }), user);
+    await ok(await requestAttestationCall(0, { field: { typed: "Email" } }), user);
     const overview = await readOverview(user.address);
     expect(overview.profile?.fields.map((f) => f.id)).toEqual(["typed:Email"]);
     expect(overview.pending.map((r) => targetId(r.target))).toEqual(["typed:Email"]);
@@ -535,7 +535,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     await ok(idt().setField({ Custom: hex("phone") }, { Private: privateCommitment(salt, phone) }), user);
     await ok(await addLinkCall("Site", "https://agent.example"), user);
     for (const target of [{ field: { typed: "Email" } }, { field: { custom: "phone" } }, { field: { link: 0 } }, { fact: "DocumentChecked" }] as const) {
-      await ok(await requestJudgementCall(0, target), user);
+      await ok(await requestAttestationCall(0, target), user);
     }
 
     // the inbox: the user's four requests, each with what the identity holds
@@ -550,9 +550,9 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     // verify the public field against the commitment read now
     const now = (await commitmentNow(user.address, { typed: "Email" }))!;
     expect(now).toEqual({ commitment: publicCommitment(email), private: false });
-    await ok(await provideJudgementCall(user.address, { typed: "Email" }, now.commitment), alice);
+    await ok(await provideAttestationCall(user.address, { typed: "Email" }, now.commitment), alice);
     // a stale commitment is refused by the runtime
-    const stale = await send(await provideJudgementCall(user.address, { link: 0 }, publicCommitment("old")), alice);
+    const stale = await send(await provideAttestationCall(user.address, { link: 0 }, publicCommitment("old")), alice);
     expect(stale.errorName).toBe("StaleCommitment");
 
     // the private field: the user's signed packet checks out against the chain, then Alice verifies
@@ -565,7 +565,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     expect(await genesisHash()).toBe(api.genesisHash.toHex());
     const checked = await checkPacket(packet, user.address, { custom: "phone" }, await genesisHash(), await readProfile(user.address));
     expect(checked).toEqual({ value: phone, commitment: privateCommitment(salt, phone) });
-    await ok(await provideJudgementCall(user.address, { custom: "phone" }, privateCommitment(salt, phone)), alice);
+    await ok(await provideAttestationCall(user.address, { custom: "phone" }, privateCommitment(salt, phone)), alice);
 
     // reject the link request, record the document
     await ok(await rejectRequestCall(user.address, { field: { link: 0 } }, "ValueMismatch", "not reachable"), alice);
@@ -574,7 +574,7 @@ describe.skipIf(!RPC)("the chain layer against a dev node", () => {
     // a dismissal records nothing; rejecting the value does, and the profile says Rejected
     expect((await readProfile(user.address))!.links[0]).toMatchObject({ verified: false, rejected: false });
     const link = (await commitmentNow(user.address, { link: 0 }))!;
-    await ok(await provideJudgementCall(user.address, { link: 0 }, link.commitment, "Rejected"), alice);
+    await ok(await provideAttestationCall(user.address, { link: 0 }, link.commitment, "Rejected"), alice);
     expect((await readProfile(user.address))!.links[0]).toMatchObject({ verified: false, rejected: true });
     const profile = (await readProfile(user.address))!;
     expect(profile.fields.filter((f) => f.verified).map((f) => f.id).sort()).toEqual(["custom:phone", "typed:Email"]);

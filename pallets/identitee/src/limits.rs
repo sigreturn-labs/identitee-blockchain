@@ -35,7 +35,7 @@ pub const MAX_SUB_LABEL_LEN: u32 = 64;
 pub const NAME_MIN: u32 = 3;
 /// Maximum length of a name.
 pub const NAME_MAX: u32 = 32;
-/// Maximum number of pending judgement requests per identity.
+/// Maximum number of pending attestation requests per identity.
 pub const MAX_PENDING_REQUESTS: u32 = 16;
 /// Maximum length of a note attached to a fact or a refusal, in bytes.
 pub const MAX_NOTE_LEN: u32 = 128;

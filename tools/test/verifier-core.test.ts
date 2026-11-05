@@ -296,7 +296,7 @@ function stubApi(options: {
     },
     call: { identiteeApi: { profile: async (key: string) => ({ toJSON: () => options.profiles?.get(key) ?? null }) } },
     query: { identitee: { agents: async () => ({ toJSON: () => (options.agent === undefined ? [0, 3] : options.agent) }) } },
-    tx: { identitee: { provideJudgement: makeTx('provideJudgement'), grantFact: makeTx('grantFact') } },
+    tx: { identitee: { provideAttestation: makeTx('provideAttestation'), grantFact: makeTx('grantFact') } },
     disconnect: async () => undefined,
   } as unknown as ApiPromise;
   return { api, sent, maxInFlight: () => maxInFlight, upgrade: (spec: number) => upgrade?.(spec) };
@@ -340,13 +340,23 @@ describe('chain', () => {
     assert.equal(chain.genesis, GENESIS);
   });
 
-  it('sends provide_judgement with the expected commitment and the method, as Verified without expiry', async () => {
+  it('sends provide_attestation with the expected commitment and the method, as Verified without expiry', async () => {
     const stub = stubApi({});
     const chain = new LiveChain(stub.api, alice, quiet);
     assert.deepEqual(await chain.attest(bob.address, KEY, `0x${'01'.repeat(32)}`, 'EmailCode'), { ok: true });
-    assert.deepEqual(stub.sent, [{ call: 'provideJudgement', args: [pk(bob), { Typed: 'Email' }, `0x${'01'.repeat(32)}`, 'Verified', 'EmailCode', null] }]);
+    assert.deepEqual(stub.sent, [{ call: 'provideAttestation', args: [pk(bob), { Typed: 'Email' }, `0x${'01'.repeat(32)}`, 'Verified', 'EmailCode', null] }]);
     assert.deepEqual(await chain.grantDocument(bob.address), { ok: true });
     assert.deepEqual(stub.sent[1], { call: 'grantFact', args: [pk(bob), 'DocumentChecked', null, 'Unspecified', '0x'] });
+  });
+
+  it('sends provide_judgement to a runtime before 12', async () => {
+    const stub = stubApi({});
+    const idt = (stub.api.tx as unknown as { identitee: Record<string, unknown> }).identitee;
+    idt.provideJudgement = idt.provideAttestation;
+    delete idt.provideAttestation;
+    const chain = new LiveChain(stub.api, alice, quiet);
+    assert.deepEqual(await chain.attest(bob.address, KEY, `0x${'01'.repeat(32)}`, 'EmailCode'), { ok: true });
+    assert.equal(stub.sent.length, 1);
   });
 
   it('maps the runtime refusals to stale, gone and failed', async () => {
